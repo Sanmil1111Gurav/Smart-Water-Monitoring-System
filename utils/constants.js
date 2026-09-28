@@ -1,0 +1,47 @@
+/**
+ * System Constants & Enums
+ */
+
+const ROLES = {
+  ADMIN: 'admin',
+  DEVELOPER: 'developer',
+  USER: 'user'
+};
+
+const EVENT_CATEGORIES = {
+  SENSOR_READINGS: 'Sensor Readings',
+  PUMP_EVENTS: 'Pump Events',
+  ALARM_EVENTS: 'Alarm Events',
+  SYSTEM_EVENTS: 'System Events'
+};
+
+const NOTIFICATION_TYPES = {
+  EMAIL: 'email',
+  TELEGRAM: 'telegram',
+  SMS: 'sms'
+};
+
+const ERROR_CODES = {
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  INVALID_INPUT: 'INVALID_INPUT',
+  NOT_FOUND: 'NOT_FOUND',
+  TOO_MANY_REQUESTS: 'TOO_MANY_REQUESTS',
+  INTERNAL_ERROR: 'INTERNAL_ERROR'
+};
+
+const DEFAULT_THRESHOLDS = {
+  LOW: 20,
+  FULL: 85,
+  OVERFLOW: 95,
+  MAX_PUMP_TIMEOUT_MINUTES: 30,
+  TANK_CAPACITY_LITERS: 1000
+};
+
+module.exports = {
+  ROLES,
+  EVENT_CATEGORIES,
+  NOTIFICATION_TYPES,
+  ERROR_CODES,
+  DEFAULT_THRESHOLDS
+};

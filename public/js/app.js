@@ -539,43 +539,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-    if (alertsFeed && notifications) {
-      const activeUnreadNotifs = notifications.filter(n => n.active);
+  async function updateUserNotificationState() {
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        if (valAlertsCount) valAlertsCount.innerText = '0';
+        updateSidebarNotificationBadge(0);
+        return;
+      }
+      const data = await notificationService.getNotifications();
+      if (data && data.unreadCount !== undefined) {
+        const count = Number(data.unreadCount) || 0;
+        if (valAlertsCount) valAlertsCount.innerText = count;
+        updateSidebarNotificationBadge(count);
+      }
+    } catch (err) {
+      console.error('Error updating user notification state:', err);
+    }
+  }
+
+    if (notifications && Array.isArray(notifications)) {
+      const activeUnreadNotifs = notifications.filter(n => n.active || !n.read);
       const activeCount = activeUnreadNotifs.length;
-      valAlertsCount.innerText = activeCount;
+      if (valAlertsCount) valAlertsCount.innerText = activeCount;
       updateSidebarNotificationBadge(activeCount);
 
       const latestUnread = activeUnreadNotifs.length > 0 ? activeUnreadNotifs[0] : null;
 
-      if (latestUnread) {
-        alertsFeed.innerHTML = `
-          <div class="alert-card ${latestUnread.severity}" style="cursor: pointer; display: flex; justify-content: space-between; align-items: flex-start;" id="dashboardLatestAlertCard" data-id="${latestUnread.id}">
-            <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1; min-width: 0;">
-              <i class="ri-alert-fill" style="font-size: 18px; margin-top: 2px; flex-shrink: 0;"></i>
-              <div style="min-width: 0; flex: 1; overflow-wrap: anywhere; word-break: break-word;">
-                <div class="alert-title">${latestUnread.title}</div>
-                <div class="alert-msg">${latestUnread.message}</div>
-                <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">${latestUnread.dateStr || ''}</div>
+      if (alertsFeed) {
+        if (latestUnread) {
+          alertsFeed.innerHTML = `
+            <div class="alert-card ${latestUnread.severity}" style="cursor: pointer; display: flex; justify-content: space-between; align-items: flex-start;" id="dashboardLatestAlertCard" data-id="${latestUnread.id}">
+              <div style="display: flex; gap: 12px; align-items: flex-start; flex: 1; min-width: 0;">
+                <i class="ri-alert-fill" style="font-size: 18px; margin-top: 2px; flex-shrink: 0;"></i>
+                <div style="min-width: 0; flex: 1; overflow-wrap: anywhere; word-break: break-word;">
+                  <div class="alert-title">${latestUnread.title}</div>
+                  <div class="alert-msg">${latestUnread.message}</div>
+                  <div style="font-size: 10px; color: var(--text-muted); margin-top: 4px;">${latestUnread.dateStr || ''}</div>
+                </div>
               </div>
+              <button class="btn-tab btn-dash-mark-read" data-id="${latestUnread.id}" style="font-size: 11px; padding: 4px 8px; margin-left: 8px; white-space: nowrap; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid var(--accent-emerald);">
+                <i class="ri-check-line"></i> Read
+              </button>
             </div>
-            <button class="btn-tab btn-dash-mark-read" data-id="${latestUnread.id}" style="font-size: 11px; padding: 4px 8px; margin-left: 8px; white-space: nowrap; flex-shrink: 0; background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid var(--accent-emerald);">
-              <i class="ri-check-line"></i> Read
-            </button>
-          </div>
-        `;
+          `;
 
-        const card = document.getElementById('dashboardLatestAlertCard');
-        if (card) {
-          card.addEventListener('click', async (e) => {
-            const id = latestUnread.id;
-            await notificationService.markRead(id);
-            if (currentView === 'notifications') renderNotificationsPage();
-            else fetchStatus();
-          });
+          const card = document.getElementById('dashboardLatestAlertCard');
+          if (card) {
+            card.addEventListener('click', async () => {
+              const id = latestUnread.id;
+              await notificationService.markRead(id);
+              if (currentView === 'notifications') renderNotificationsPage();
+              else fetchStatus();
+            });
+          }
+        } else {
+          alertsFeed.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 16px;">No active alerts</div>';
         }
-      } else {
-        alertsFeed.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center; padding: 16px;">No active alerts</div>';
       }
+    } else {
+      updateUserNotificationState();
     }
 
     if (document.activeElement !== setLowPercent) setLowPercent.value = thresholds.lowPercent;
@@ -873,6 +896,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('historyCategorySelect').addEventListener('change', renderHistoryPage);
   document.getElementById('historySearchInput').addEventListener('input', renderHistoryPage);
+
+  const btnExportCsv = document.getElementById('btnExportCsv');
+  if (btnExportCsv) {
+    btnExportCsv.addEventListener('click', () => {
+      const cat = document.getElementById('historyCategorySelect').value;
+      const search = document.getElementById('historySearchInput').value;
+      window.location.href = `/api/history/full?category=${cat}&search=${encodeURIComponent(search)}&format=csv`;
+    });
+  }
 
   // Notifications Page Renderer & Email Settings Handlers
   const chkEmailNotifications = document.getElementById('chkEmailNotifications');
@@ -1313,14 +1345,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initial HTTP Fetch
   async function fetchStatus() {
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch('/api/status', { headers: getAuthHeaders() });
       const data = await res.json();
       if (data.state) {
         renderUI({
           ...data.state,
           history: data.history,
           activityLogs: data.activityLogs,
-          notifications: data.notifications
+          notifications: data.notifications || []
         });
       }
     } catch (e) {
@@ -1441,6 +1473,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const token = getAuthToken();
     if (!token) {
       updateAuthUserUI(null);
+      if (valAlertsCount) valAlertsCount.innerText = '0';
+      updateSidebarNotificationBadge(0);
       showLoginForm();
       return false;
     }
@@ -1459,12 +1493,16 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         localStorage.removeItem('smartwater_auth_token');
         updateAuthUserUI(null);
+        if (valAlertsCount) valAlertsCount.innerText = '0';
+        updateSidebarNotificationBadge(0);
         showLoginForm();
         return false;
       }
     } catch (err) {
       console.error('Auth verification error:', err);
       updateAuthUserUI(null);
+      if (valAlertsCount) valAlertsCount.innerText = '0';
+      updateSidebarNotificationBadge(0);
       showLoginForm();
       return false;
     }
@@ -1959,7 +1997,13 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnLogout) {
     btnLogout.addEventListener('click', () => {
       localStorage.removeItem('smartwater_auth_token');
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+        ws = null;
+      }
       updateAuthUserUI(null);
+      if (valAlertsCount) valAlertsCount.innerText = '0';
+      updateSidebarNotificationBadge(0);
       showLoginForm();
     });
   }

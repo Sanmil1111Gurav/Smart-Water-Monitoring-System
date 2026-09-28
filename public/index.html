@@ -727,7 +727,7 @@
           <div class="card-header" style="flex-wrap: wrap; gap: 14px;">
             <div class="card-title"><i class="ri-history-line"></i> <span>System Historical Logs</span></div>
             
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
               <input type="text" id="historySearchInput" placeholder="Search event or status..." class="form-control" style="width: 200px; padding: 6px 12px;">
               <select id="historyCategorySelect" class="form-control" style="width: 180px; padding: 6px 12px;">
                 <option value="all">All Categories</option>
@@ -736,6 +736,7 @@
                 <option value="Alarm Events">Alarm Events</option>
                 <option value="System Events">System Events</option>
               </select>
+              <button class="btn-tab" id="btnExportCsv" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid var(--accent-blue);"><i class="ri-download-2-line"></i> Export CSV</button>
             </div>
           </div>
 

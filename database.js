@@ -186,10 +186,13 @@ async function initDatabase() {
 
   // 8. INDEXING
   await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
     CREATE INDEX IF NOT EXISTS idx_telemetry_device_time ON telemetry (device_id, timestamp);
     CREATE INDEX IF NOT EXISTS idx_events_device_cat_time ON events (device_id, category, timestamp);
     CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);
     CREATE INDEX IF NOT EXISTS idx_notifications_ack ON notifications (acknowledged, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_ack ON notifications (user_id, acknowledged);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_digest_user_date ON daily_digest_logs (user_id, digest_date);
   `);
 

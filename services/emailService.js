@@ -420,10 +420,42 @@ EVENT METRICS:
   return { success: overallSuccess, count: results.length, digestDate, results };
 }
 
+/**
+ * Send Password Reset OTP Email
+ */
+async function sendPasswordResetOTP({ userId, userEmail, username, otp }) {
+  const emailSubject = 'SmartWater System - Password Reset OTP';
+  const emailText = `Hello ${username || 'User'},\n\nWe received a request to reset your Smart Water Monitoring System password.\n\nYour password reset OTP is:\n${otp}\n\nThis OTP expires in 10 minutes.\n\nIf you did not request this, you can safely ignore this email.`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff;">
+      <h2 style="color: #0284c7; margin-bottom: 16px;">Password Reset OTP</h2>
+      <p style="color: #334155; font-size: 15px;">Hello <strong>${username || 'User'}</strong>,</p>
+      <p style="color: #334155; font-size: 15px;">We received a request to reset your Smart Water Monitoring System password.</p>
+      <div style="margin: 24px 0; text-align: center; background-color: #f1f5f9; padding: 16px; border-radius: 8px; letter-spacing: 6px;">
+        <span style="font-size: 32px; font-weight: bold; color: #0284c7;">${otp}</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">This OTP is valid for <strong>10 minutes</strong>. Do not share this code with anyone.</p>
+    </div>
+  `;
+
+  return sendUserEmail({
+    userId,
+    userEmail,
+    subject: emailSubject,
+    text: emailText,
+    html: emailHtml,
+    category: 'ACCOUNT',
+    alertType: 'password_reset',
+    severity: 'warning'
+  });
+}
+
 module.exports = {
   sendUserEmail,
+  sendPasswordResetOTP,
   triggerEmergencyAlert,
   sendEventNotification,
   sendDailyDigest,
   getPreviousCompletedDateString
 };
+
