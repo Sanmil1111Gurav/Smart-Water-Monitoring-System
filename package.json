@@ -1,0 +1,31 @@
+{
+  "name": "esp32-water-level-dashboard",
+  "version": "1.0.0",
+  "description": "Real-time IoT Water Level Monitoring and Pump Control Dashboard for ESP32",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "esp32",
+    "water-level",
+    "iot",
+    "dashboard",
+    "l293d",
+    "motor-driver"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^18.0.4",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^6.10.1",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1",
+    "ws": "^8.17.0"
+  }
+}

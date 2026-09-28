@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Water Monitoring & ESP32 Pump Control System</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Remix Icons CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Authentication Container with View Switching -->
+  <div class="login-wrapper" id="loginContainer">
+
+    <!-- 1. SIGN IN VIEW -->
+    <div class="login-card auth-view active" id="authViewSignIn">
+      <div class="login-brand">
+        <div class="brand-icon">
+          <i class="ri-drop-fill"></i>
+        </div>
+        <h2>SmartWater System</h2>
+        <p>Smart Water Level Monitoring & Automation System</p>
+      </div>
+
+      <div class="login-header">
+        <h3>Sign In</h3>
+        <p>Enter your credentials to access dashboard</p>
+      </div>
+
+      <div class="login-error hidden" id="signInErrorBox">
+        <i class="ri-error-warning-fill"></i>
+        <span id="signInErrorText">Invalid email or password.</span>
+      </div>
+
+      <form id="signInForm" novalidate>
+        <div class="form-group">
+          <label for="loginUsername">Email or Username</label>
+          <div class="input-with-icon">
+            <i class="ri-user-3-line"></i>
+            <input type="text" class="form-control" id="loginUsername" placeholder="Enter your email or username" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <div class="input-with-icon">
+            <i class="ri-lock-2-line"></i>
+            <input type="password" class="form-control" id="loginPassword" placeholder="••••••••" required>
+            <button type="button" class="btn-toggle-pw" data-toggle-pw="loginPassword" title="Show/Hide Password">
+              <i class="ri-eye-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnSignInSubmit" style="margin-top: 10px;">
+          <span id="btnSignInText"><i class="ri-login-box-line"></i> Sign In to Dashboard</span>
+        </button>
+
+        <div class="auth-links">
+          <a href="#" id="linkForgotPassword" data-show-auth="forgot">Forgot Password?</a>
+          <p>Don't have an admin account? <a href="#" id="linkGoToRegister" data-show-auth="register">Create Account</a></p>
+        </div>
+      </form>
+    </div>
+
+    <!-- 2. REGISTRATION VIEW -->
+    <div class="login-card auth-view hidden" id="authViewRegister">
+      <div class="login-brand">
+        <div class="brand-icon">
+          <i class="ri-drop-fill"></i>
+        </div>
+        <h2>Create Admin Account</h2>
+        <p>Register an administrator profile for system management</p>
+      </div>
+
+      <div class="login-error hidden" id="registerErrorBox">
+        <i class="ri-error-warning-fill"></i>
+        <span id="registerErrorText">Error message here</span>
+      </div>
+
+      <div class="login-success hidden" id="registerSuccessBox">
+        <i class="ri-checkbox-circle-fill"></i>
+        <span id="registerSuccessText">Account created!</span>
+      </div>
+
+      <form id="registerForm" novalidate>
+        <div class="form-group">
+          <label for="regFullName">Full Name</label>
+          <div class="input-with-icon">
+            <i class="ri-user-line"></i>
+            <input type="text" class="form-control" id="regFullName" placeholder="e.g. Sarah Jenkins" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="regUsername">Username</label>
+          <div class="input-with-icon">
+            <i class="ri-user-settings-line"></i>
+            <input type="text" class="form-control" id="regUsername" placeholder="e.g. sjenkins" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="regEmail">Email Address</label>
+          <div class="input-with-icon">
+            <i class="ri-mail-line"></i>
+            <input type="email" class="form-control" id="regEmail" placeholder="user@example.com" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="regPassword">Password (Min 8 chars, 1 uppercase, 1 lowercase, 1 number)</label>
+          <div class="input-with-icon">
+            <i class="ri-lock-2-line"></i>
+            <input type="password" class="form-control" id="regPassword" placeholder="••••••••" required>
+            <button type="button" class="btn-toggle-pw" data-toggle-pw="regPassword" title="Show/Hide Password">
+              <i class="ri-eye-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="regConfirmPassword">Confirm Password</label>
+          <div class="input-with-icon">
+            <i class="ri-lock-check-line"></i>
+            <input type="password" class="form-control" id="regConfirmPassword" placeholder="••••••••" required>
+            <button type="button" class="btn-toggle-pw" data-toggle-pw="regConfirmPassword" title="Show/Hide Password">
+              <i class="ri-eye-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group hidden" id="groupSetupCode">
+          <label for="regSetupCode">Admin Registration Code</label>
+          <div class="input-with-icon">
+            <i class="ri-shield-keyhole-line"></i>
+            <input type="text" class="form-control" id="regSetupCode" placeholder="Enter ADMIN-SMARTWATER-2026">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnRegisterSubmit" style="margin-top: 10px;">
+          <span id="btnRegisterText"><i class="ri-user-add-line"></i> Create Account</span>
+        </button>
+
+        <div class="auth-links">
+          <p>Already have an account? <a href="#" id="linkGoToSignIn" data-show-auth="signIn">Sign In</a></p>
+        </div>
+      </form>
+    </div>
+
+    <!-- 3. FORGOT PASSWORD VIEW -->
+    <div class="login-card auth-view hidden" id="authViewForgot">
+      <div class="login-brand">
+        <div class="brand-icon">
+          <i class="ri-drop-fill"></i>
+        </div>
+        <h2>Forgot Password</h2>
+        <p>Enter your registered email address to receive reset instructions</p>
+      </div>
+
+      <div class="login-error hidden" id="forgotErrorBox">
+        <i class="ri-error-warning-fill"></i>
+        <span id="forgotErrorText">Error message</span>
+      </div>
+
+      <div class="login-success hidden" id="forgotSuccessBox">
+        <i class="ri-checkbox-circle-fill"></i>
+        <span id="forgotSuccessText">OTP sent!</span>
+      </div>
+
+      <form id="forgotForm" novalidate>
+        <div class="form-group">
+          <label for="forgotEmail">Email Address</label>
+          <div class="input-with-icon">
+            <i class="ri-mail-line"></i>
+            <input type="email" class="form-control" id="forgotEmail" placeholder="Enter your registered email" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnForgotSubmit" style="margin-top: 10px;">
+          <span id="btnForgotText"><i class="ri-send-plane-line"></i> Send OTP</span>
+        </button>
+
+        <div class="auth-links">
+          <a href="#" id="linkBackToSignInFromForgot" data-show-auth="signIn"><i class="ri-arrow-left-line"></i> Back to Sign In</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- 3.5 VERIFY OTP VIEW -->
+    <div class="login-card auth-view hidden" id="authViewVerifyOtp">
+      <div class="login-brand">
+        <div class="brand-icon">
+          <i class="ri-key-2-fill"></i>
+        </div>
+        <h2>Verify OTP</h2>
+        <p>Enter the 6-digit OTP sent to your email</p>
+      </div>
+
+      <div class="login-error hidden" id="otpErrorBox">
+        <i class="ri-error-warning-fill"></i>
+        <span id="otpErrorText">Error message</span>
+      </div>
+
+      <div class="login-success hidden" id="otpSuccessBox">
+        <i class="ri-checkbox-circle-fill"></i>
+        <span id="otpSuccessText">OTP Verified!</span>
+      </div>
+
+      <form id="verifyOtpForm" novalidate>
+        <div class="form-group">
+          <label for="inputOtpCode">OTP Code</label>
+          <div class="input-with-icon">
+            <i class="ri-shield-keyhole-line"></i>
+            <input type="text" class="form-control" id="inputOtpCode" maxlength="6" placeholder="123456" style="letter-spacing: 4px; font-weight: bold; text-align: center;" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnVerifyOtpSubmit" style="margin-top: 10px;">
+          <span id="btnVerifyOtpText"><i class="ri-checkbox-circle-line"></i> Verify OTP</span>
+        </button>
+
+        <div class="auth-links" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+          <a href="#" id="btnResendOtp" style="font-size: 0.85rem;"><i class="ri-refresh-line"></i> Resend OTP</a>
+          <a href="#" id="linkBackToSignInFromOtp" data-show-auth="signIn" style="font-size: 0.85rem;"><i class="ri-arrow-left-line"></i> Back to Sign In</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- 4. SET NEW PASSWORD VIEW -->
+    <div class="login-card auth-view hidden" id="authViewReset">
+      <div class="login-brand">
+        <div class="brand-icon">
+          <i class="ri-lock-password-fill"></i>
+        </div>
+        <h2>Set New Password</h2>
+        <p>Enter your new password below</p>
+      </div>
+
+      <div class="login-error hidden" id="resetErrorBox">
+        <i class="ri-error-warning-fill"></i>
+        <span id="resetErrorText">Error message</span>
+      </div>
+
+      <div class="login-success hidden" id="resetSuccessBox">
+        <i class="ri-checkbox-circle-fill"></i>
+        <span id="resetSuccessText">Password reset successfully!</span>
+      </div>
+
+      <form id="resetForm" novalidate>
+        <input type="hidden" id="resetTokenInput">
+
+        <div class="form-group">
+          <label for="resetNewPassword">New Password</label>
+          <div class="input-with-icon">
+            <i class="ri-lock-2-line"></i>
+            <input type="password" class="form-control" id="resetNewPassword" placeholder="••••••••" required>
+            <button type="button" class="btn-toggle-pw" data-toggle-pw="resetNewPassword" title="Show/Hide Password">
+              <i class="ri-eye-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="resetConfirmPassword">Confirm New Password</label>
+          <div class="input-with-icon">
+            <i class="ri-lock-check-line"></i>
+            <input type="password" class="form-control" id="resetConfirmPassword" placeholder="••••••••" required>
+            <button type="button" class="btn-toggle-pw" data-toggle-pw="resetConfirmPassword" title="Show/Hide Password">
+              <i class="ri-eye-line"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnResetSubmit" style="margin-top: 10px;">
+          <span id="btnResetText"><i class="ri-shield-check-line"></i> Reset Password</span>
+        </button>
+
+        <div class="auth-links">
+          <a href="#" id="linkBackToSignInFromReset" data-show-auth="signIn"><i class="ri-arrow-left-line"></i> Back to Sign In</a>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- Left Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="brand-header">
+      <div class="brand-icon">
+        <i class="ri-drop-fill"></i>
+      </div>
+      <div class="brand-text">
+        <h2>SmartWater</h2>
+        <p>Monitoring System</p>
+      </div>
+    </div>
+
+    <nav class="nav-menu">
+      <a class="nav-item active" data-target="dashboard">
+        <i class="ri-dashboard-3-line"></i>
+        <span>Dashboard</span>
+      </a>
+      <a class="nav-item" data-target="devices">
+        <i class="ri-cpu-line"></i>
+        <span>Devices</span>
+      </a>
+      <a class="nav-item" data-target="analytics">
+        <i class="ri-line-chart-line"></i>
+        <span>Analytics</span>
+      </a>
+      <a class="nav-item" data-target="history">
+        <i class="ri-history-line"></i>
+        <span>History</span>
+      </a>
+      <a class="nav-item" data-target="notifications">
+        <i class="ri-notification-3-line"></i>
+        <span>Notifications</span>
+        <span class="nav-badge" id="badgeAlertsCount" style="display: none;"></span>
+      </a>
+      <a class="nav-item" data-target="settings">
+        <i class="ri-settings-4-line"></i>
+        <span>Settings</span>
+      </a>
+      <a class="nav-item" data-target="help">
+        <i class="ri-question-line"></i>
+        <span>Help & About</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- Main Wrapper -->
+  <div class="main-wrapper">
+    
+    <!-- Top Navigation Bar -->
+    <header class="topbar">
+      <div class="page-title">
+        <h1 id="pageTitleText">Dashboard</h1>
+        <p id="pageSubTitleText">Real-time overview of your water monitoring system</p>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="time-badge" id="liveClockBadge">
+          <i class="ri-time-line"></i>
+          <span id="currentTimeStr">--:--:--</span>
+        </div>
+
+        <div class="user-profile">
+          <div class="avatar">A</div>
+          <div class="user-info">
+            <strong id="displayUsername">Admin</strong>
+            <span>Administrator</span>
+          </div>
+          <button class="btn-logout" id="btnLogout" title="Logout from system">
+            <i class="ri-logout-box-r-line"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content Views Wrapper -->
+    <div class="view-container">
+
+      <!-- ================= 1. DASHBOARD VIEW ================= -->
+      <main class="dashboard-content page-view active" id="view-dashboard">
+        <!-- Stale Data Warning Banner -->
+        <div class="stale-banner hidden" id="staleBanner">
+          <i class="ri-error-warning-fill"></i>
+          <div>
+            <strong>Warning: ESP32 Hardware Disconnected!</strong>
+            <p id="staleBannerText">No telemetry received for over 12 seconds. Data shown may be outdated.</p>
+          </div>
+        </div>
+
+        <!-- Top Metric Quick Cards -->
+        <section class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-icon water"><i class="ri-water-percent-line"></i></div>
+            <div class="metric-data">
+              <div class="metric-label">Water Level</div>
+              <div class="metric-value" id="valWaterLevel">78%</div>
+              <div class="status-pill normal" id="pillWaterState">Tank Normal</div>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon pump"><i class="ri-shut-down-line" id="metricPumpIcon"></i></div>
+            <div class="metric-data">
+              <div class="metric-label">Pump Status</div>
+              <div class="metric-value" id="valPumpStatus">OFF</div>
+              <div class="status-pill normal" id="pillPumpMode">Automatic Mode</div>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon usage"><i class="ri-drop-line"></i></div>
+            <div class="metric-data">
+              <div class="metric-label">Today's Usage</div>
+              <div class="metric-value" id="valTodayUsage">450 L</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Water Consumed</div>
+            </div>
+          </div>
+
+          <div class="metric-card">
+            <div class="metric-icon alerts"><i class="ri-alert-line"></i></div>
+            <div class="metric-data">
+              <div class="metric-label">Alerts</div>
+              <div class="metric-value" id="valAlertsCount">2</div>
+              <div style="font-size: 11px; color: var(--accent-amber); font-weight: 600;">Need Attention</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Grid Row 1: Tank Visual & Live Analytics Chart -->
+        <section class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-temp-water-line"></i> <span>Tank Visualization</span></div>
+              <div class="status-pill normal" id="tankVisualStatePill">NORMAL</div>
+            </div>
+            <div class="tank-container">
+              <div class="tank-outer">
+                <div class="tank-inner">
+                  <div class="tank-water" id="tankWaterElem" style="height: 78%;"></div>
+                </div>
+                <div class="tank-glass-glare"></div>
+                <div class="tank-overlay-info">
+                  <div class="tank-percent" id="tankOverlayPercent">78%</div>
+                  <div class="status-pill normal" id="tankOverlayState">NORMAL</div>
+                </div>
+              </div>
+              <div class="tank-stats-row">
+                <div class="tank-stat-item"><div class="val" id="statCapacity">1000 L</div><div class="lbl">Tank Capacity</div></div>
+                <div class="tank-stat-item"><div class="val" id="statCurrentLiters">780 L</div><div class="lbl">Current Volume</div></div>
+                <div class="tank-stat-item"><div class="val" id="statRawDistance">22 cm</div><div class="lbl">Sensor Depth</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-line-chart-line"></i> <span>Water Level Analytics</span></div>
+              <div class="chart-controls">
+                <button class="btn-tab active" data-range="live">Live</button>
+                <button class="btn-tab" data-range="today">Today</button>
+                <button class="btn-tab" data-range="week">7 Days</button>
+              </div>
+            </div>
+            <div style="position: relative; height: 260px; width: 100%;">
+              <canvas id="waterChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- Grid Row 2: Pump Control & Device Status -->
+        <section class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-equalizer-line"></i> <span>Pump Control</span></div>
+              <span style="font-size: 12px; color: var(--text-muted);" id="pumpDriverLbl">L293D Driver Active</span>
+            </div>
+            <div class="pump-control-wrapper">
+              <div class="pump-status-display">
+                <div>
+                  <div style="font-size: 12px; color: var(--text-muted);">Current Status</div>
+                  <div style="font-size: 28px; font-weight: 800; margin: 2px 0;" id="pumpLargeStatusText">OFF</div>
+                  <div style="font-size: 12px; color: var(--accent-cyan); font-weight: 600;" id="pumpModeDisplay">Automatic Mode</div>
+                </div>
+                <div class="pump-visual-ring" id="pumpVisualRing"><i class="ri-restart-line"></i></div>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 8px; font-weight: 600;">CONTROL MODE</label>
+                <div class="pump-mode-toggle">
+                  <button class="mode-btn active" id="btnModeAuto">AUTOMATIC</button>
+                  <button class="mode-btn" id="btnModeManual">MANUAL</button>
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 8px; font-weight: 600;">MANUAL OVERRIDE</label>
+                <div class="action-buttons-group">
+                  <button class="btn-action on" id="btnPumpOn" disabled><i class="ri-play-circle-line"></i> Turn ON</button>
+                  <button class="btn-action off" id="btnPumpOff" disabled><i class="ri-stop-circle-line"></i> Turn OFF</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-hardware-line"></i> <span>Device Status</span></div>
+              <button class="btn-tab" id="btnConfigThresholds">Configure Thresholds</button>
+            </div>
+            <div class="device-list">
+              <div class="device-item">
+                <div class="device-info">
+                  <div class="device-icon"><i class="ri-cpu-line"></i></div>
+                  <div><div class="device-name">ESP32 Board</div><div class="device-sub" id="devEspDetail">IP: 192.168.1.105 | Uptime: 3d 12h</div></div>
+                </div>
+                <div class="status-pill normal" id="devEspStatus">CONNECTED</div>
+              </div>
+              <div class="device-item">
+                <div class="device-info">
+                  <div class="device-icon"><i class="ri-radar-line"></i></div>
+                  <div><div class="device-name">Ultrasonic Sensor (HC-SR04)</div><div class="device-sub" id="devSensorDetail">Reading: 22 cm distance</div></div>
+                </div>
+                <div class="status-pill normal">NORMAL</div>
+              </div>
+              <div class="device-item">
+                <div class="device-info">
+                  <div class="device-icon"><i class="ri-wifi-line"></i></div>
+                  <div><div class="device-name">Wi-Fi Module</div><div class="device-sub" id="devWifiDetail">Signal Strength: -52 dBm</div></div>
+                </div>
+                <div class="status-pill normal">ONLINE</div>
+              </div>
+              <div class="device-item">
+                <div class="device-info">
+                  <div class="device-icon"><i class="ri-settings-5-line"></i></div>
+                  <div><div class="device-name">L293D Motor Driver & Pump</div><div class="device-sub" id="devMotorDetail">State: Standby</div></div>
+                </div>
+                <div class="status-pill normal" id="devMotorStatus">READY</div>
+              </div>
+              <div class="device-item">
+                <div class="device-info">
+                  <div class="device-icon"><i class="ri-alarm-warning-line"></i></div>
+                  <div><div class="device-name">Piezo Buzzer Alarm</div><div class="device-sub" id="devBuzzerDetail">State: Quiet | Armed</div></div>
+                </div>
+                <div class="status-pill normal" id="devBuzzerPill">ARMED</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Grid Row 3: Activity & Health -->
+        <section class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-list-check-2"></i> <span>Recent Activity</span></div>
+              <button class="btn-tab" id="btnRecentActivityViewAll" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid var(--accent-blue);"><i class="ri-eye-line"></i> View All</button>
+            </div>
+            <div class="activity-timeline" id="activityTimeline"></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ri-notification-badge-line"></i> <span>Latest Active Alert</span></div>
+                <button class="btn-tab" id="btnDashboardViewAll" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid var(--accent-blue);"><i class="ri-eye-line"></i> View All</button>
+              </div>
+              <div class="alerts-feed" id="alertsFeed"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ri-heart-pulse-line"></i> <span>System Health</span></div>
+              </div>
+              <div class="health-grid">
+                <div class="health-card"><i class="ri-temp-cold-line"></i><div class="health-val" id="valTemp">31.4°C</div><div class="health-lbl">Temperature</div></div>
+                <div class="health-card"><i class="ri-mist-line"></i><div class="health-val" id="valHumidity">62%</div><div class="health-lbl">Humidity</div></div>
+                <div class="health-card"><i class="ri-timer-line"></i><div class="health-val" id="valUptime">3d 12h</div><div class="health-lbl">Uptime</div></div>
+                <div class="health-card"><i class="ri-signal-tower-line"></i><div class="health-val" id="valSignal">-52 dBm</div><div class="health-lbl">Signal Strength</div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- ================= 2. DEVICES VIEW ================= -->
+      <main class="dashboard-content page-view" id="view-devices">
+        <div class="stale-banner hidden" id="devDisconnectedBanner">
+          <i class="ri-wifi-off-line"></i>
+          <div>
+            <strong>No ESP32 Hardware Connected</strong>
+            <p>Waiting for ESP32 connection... Connect the ESP32 hardware to start receiving live device telemetry.</p>
+          </div>
+        </div>
+
+        <section class="devices-grid">
+          <!-- ESP32 Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-cpu-line"></i> <span>ESP32 Microcontroller</span></div>
+              <span class="status-pill normal" id="devCardEspPill">ONLINE</span>
+            </div>
+            <div class="device-details-body">
+              <div class="detail-row"><span>Device Name:</span><strong id="dEspName">ESP32 Node-01</strong></div>
+              <div class="detail-row"><span>IP Address:</span><strong id="dEspIp">192.168.1.105</strong></div>
+              <div class="detail-row"><span>MAC Address:</span><strong id="dEspMac">24:0A:C4:00:11:22</strong></div>
+              <div class="detail-row"><span>Wi-Fi RSSI:</span><strong id="dEspRssi">-52 dBm (Strong)</strong></div>
+              <div class="detail-row"><span>Uptime:</span><strong id="dEspUptime">3d 12h 45m</strong></div>
+              <div class="detail-row"><span>Firmware:</span><strong id="dEspFw">v2.4.1-build8</strong></div>
+              <div class="detail-row"><span>Last Ping:</span><strong id="dEspLastPing">Just Now</strong></div>
+            </div>
+          </div>
+
+          <!-- Ultrasonic Sensor Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-radar-line"></i> <span>Water Level Sensor (HC-SR04)</span></div>
+              <span class="status-pill normal" id="devCardSensorPill">HEALTHY</span>
+            </div>
+            <div class="device-details-body">
+              <div class="detail-row"><span>Sensor Type:</span><strong>Ultrasonic Distance (HC-SR04)</strong></div>
+              <div class="detail-row"><span>Raw Sensor Depth:</span><strong id="dSensorRaw">22 cm</strong></div>
+              <div class="detail-row"><span>Calculated Level:</span><strong id="dSensorPercent">78%</strong></div>
+              <div class="detail-row"><span>Sensor Health:</span><strong id="dSensorHealth" style="color: var(--accent-emerald);">100% Optimal</strong></div>
+              <div class="detail-row"><span>Last Reading:</span><strong id="dSensorLastReading">10:45:12 AM</strong></div>
+              <div class="detail-row"><span>Trig Pin / Echo Pin:</span><strong>GPIO 5 / GPIO 18</strong></div>
+            </div>
+          </div>
+
+          <!-- L293D Pump Driver Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-settings-5-line"></i> <span>L293D Motor Driver & Pump</span></div>
+              <span class="status-pill normal" id="devCardPumpPill">READY</span>
+            </div>
+            <div class="device-details-body">
+              <div class="detail-row"><span>Pump Power Status:</span><strong id="dPumpStatus">OFF</strong></div>
+              <div class="detail-row"><span>Operating Mode:</span><strong id="dPumpMode">AUTOMATIC</strong></div>
+              <div class="detail-row"><span>Total Runtime:</span><strong id="dPumpTotalRun">124.5 Hours</strong></div>
+              <div class="detail-row"><span>Activations Today:</span><strong id="dPumpActivations">8 Cycles</strong></div>
+              <div class="detail-row"><span>Last Activation:</span><strong id="dPumpLastAct">45 mins ago</strong></div>
+              <div class="detail-row"><span>Driver Pins (Enable/IN1/IN2):</span><strong>GPIO 14 / 27 / 26</strong></div>
+            </div>
+          </div>
+
+          <!-- Piezo Buzzer Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-alarm-warning-line"></i> <span>Piezoelectric Buzzer</span></div>
+              <span class="status-pill normal" id="devCardBuzzerPill">ARMED</span>
+            </div>
+            <div class="device-details-body">
+              <div class="detail-row"><span>Buzzer Status:</span><strong id="dBuzzerStatus">Quiet (Inactive)</strong></div>
+              <div class="detail-row"><span>System Alarm:</span><strong id="dBuzzerArmed">Enabled & Armed</strong></div>
+              <div class="detail-row"><span>Current Condition:</span><strong id="dBuzzerCondition">Normal Operating Range</strong></div>
+              <div class="detail-row"><span>Trigger Level:</span><strong>Overflow >= 95% / Low <= 20%</strong></div>
+              <div class="detail-row"><span>Buzzer GPIO Pin:</span><strong>GPIO 19</strong></div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- ================= 3. ANALYTICS VIEW ================= -->
+      <main class="dashboard-content page-view" id="view-analytics">
+        <div class="card-header" style="margin-bottom: 20px;">
+          <h2 style="font-size: 18px; font-weight: 700;">Performance & Water Usage Analytics</h2>
+          <div class="chart-controls">
+            <button class="btn-tab active" data-analytics-range="today">Today</button>
+            <button class="btn-tab" data-analytics-range="7d">7 Days</button>
+            <button class="btn-tab" data-analytics-range="month">Month</button>
+            <button class="btn-tab" data-analytics-range="year">Year</button>
+          </div>
+        </div>
+
+        <section class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-icon water"><i class="ri-drop-fill"></i></div>
+            <div class="metric-data">
+              <div class="metric-label" id="anAvgLabel">Average Water Level</div>
+              <div class="metric-value" id="anAvgLevel">74%</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="anAvgSub">Target range 20%-85%</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon pump"><i class="ri-arrow-up-down-line"></i></div>
+            <div class="metric-data">
+              <div class="metric-label" id="anMinMaxLabel">Min / Max Level</div>
+              <div class="metric-value" id="anMinMax">18% / 96%</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="anMinMaxSub">Today</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon usage"><i class="ri-dashboard-fill"></i></div>
+            <div class="metric-data">
+              <div class="metric-label" id="anUsageLabel">Total Water Usage</div>
+              <div class="metric-value" id="anTotalUsage">450 L</div>
+              <div style="font-size: 11px; color: var(--text-emerald); font-weight: 600;" id="anUsageSub">Optimal Efficiency</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon alerts"><i class="ri-time-fill"></i></div>
+            <div class="metric-data">
+              <div class="metric-label" id="anRuntimeLabel">Pump Runtime</div>
+              <div class="metric-value" id="anPumpRuntime">45 m</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="anPumpActivations">8 Activations Today</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-line-chart-line"></i> <span>Water Level Trend Over Time</span></div>
+            </div>
+            <div style="position: relative; height: 280px; width: 100%;">
+              <canvas id="analyticsWaterChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-bar-chart-fill"></i> <span>Water Consumption Breakdown (Liters)</span></div>
+            </div>
+            <div style="position: relative; height: 280px; width: 100%;">
+              <canvas id="analyticsUsageChart"></canvas>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- ================= 4. HISTORY VIEW ================= -->
+      <main class="dashboard-content page-view" id="view-history">
+        <div class="card">
+          <div class="card-header" style="flex-wrap: wrap; gap: 14px;">
+            <div class="card-title"><i class="ri-history-line"></i> <span>System Historical Logs</span></div>
+            
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <input type="text" id="historySearchInput" placeholder="Search event or status..." class="form-control" style="width: 200px; padding: 6px 12px;">
+              <select id="historyCategorySelect" class="form-control" style="width: 180px; padding: 6px 12px;">
+                <option value="all">All Categories</option>
+                <option value="Sensor Readings">Sensor Readings</option>
+                <option value="Pump Events">Pump Events</option>
+                <option value="Alarm Events">Alarm Events</option>
+                <option value="System Events">System Events</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date & Time</th>
+                  <th>Category</th>
+                  <th>Event Description</th>
+                  <th>Water Level</th>
+                  <th>Sensor Depth</th>
+                  <th>Pump State</th>
+                  <th>Mode</th>
+                  <th>Buzzer Status</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody">
+                <!-- Dynamically generated rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <!-- ================= 5. NOTIFICATIONS VIEW ================= -->
+      <main class="dashboard-content page-view" id="view-notifications">
+        <!-- Notification Status Banner -->
+        <div class="stale-banner" id="notifStatusBanner" style="margin-bottom: 20px; background: rgba(56, 189, 248, 0.12); border-color: var(--accent-blue); color: var(--text-primary);">
+          <i class="ri-mail-line" style="color: var(--accent-blue); font-size: 24px;"></i>
+          <div style="flex: 1;">
+            <strong>Email Delivery</strong>
+            <div style="margin-top: 4px;">Registered Email Recipient: <span id="registeredEmailRecipientDisplay" style="color: var(--accent-blue); font-weight: 700;">Loading...</span></div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Notifications are automatically sent to your registered email address according to your notification preferences.</div>
+          </div>
+        </div>
+
+        <div class="login-error hidden" id="notifAlertErrorBox" style="margin-bottom: 16px;">
+          <i class="ri-error-warning-fill"></i> <span id="notifAlertErrorText"></span>
+        </div>
+        <div class="login-success hidden" id="notifAlertSuccessBox" style="margin-bottom: 16px;">
+          <i class="ri-checkbox-circle-fill"></i> <span id="notifAlertSuccessText"></span>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-alarm-warning-line"></i> <span>Active System Alerts</span></div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-tab" id="btnViewAllNotifications" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid var(--accent-blue);"><i class="ri-eye-line"></i> View All</button>
+                <button class="btn-tab" id="btnMarkAllRead"><i class="ri-check-double-line"></i> Mark All Read</button>
+              </div>
+            </div>
+            <div class="alerts-feed" id="notificationsActiveFeed"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ri-notification-badge-line"></i> <span>Email Preferences & Actions</span></div>
+            </div>
+            <div class="device-details-body">
+              <div class="detail-row">
+                <div><strong>Email Notifications</strong><div style="font-size: 11px; color: var(--text-muted);">Enable system alert dispatch to registered email</div></div>
+                <input type="checkbox" id="chkEmailNotifications" checked>
+              </div>
+              <div class="detail-row">
+                <div><strong>Emergency Alerts</strong><div style="font-size: 11px; color: var(--text-muted);">Emergency overflow & safety shutoff email alerts</div></div>
+                <input type="checkbox" id="chkEmergencyAlerts" checked>
+              </div>
+              <div class="detail-row">
+                <div><strong>Daily Digest Report</strong><div style="font-size: 11px; color: var(--text-muted);">Daily aggregated telemetry & tank usage summary</div></div>
+                <input type="checkbox" id="chkDailyDigest" checked>
+              </div>
+              <div style="display: flex; gap: 12px; margin-top: 16px;">
+                <button class="btn-primary" id="btnSaveIntegrations" style="flex: 1;"><i class="ri-save-line"></i> Save Preferences</button>
+                <button class="btn-tab" id="btnTriggerDigest" style="flex: 1;"><i class="ri-file-chart-line"></i> Send Digest Now</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-header">
+            <div class="card-title"><i class="ri-file-list-line"></i> <span>Notification History Log</span></div>
+            <button class="btn-tab" id="btnClearNotifications">Clear History</button>
+          </div>
+          <div class="activity-timeline" id="notificationsHistoryList"></div>
+        </div>
+      </main>
+
+      <!-- ================= 6. SETTINGS VIEW ================= -->
+      <main class="dashboard-content page-view" id="view-settings">
+        <form id="fullSettingsForm">
+          
+          <!-- Validation Error Banner -->
+          <div class="stale-banner hidden" id="settingsValidationError" style="margin-bottom: 20px; background: rgba(244, 63, 94, 0.15); border-color: var(--accent-rose); color: #fecdd3;">
+            <i class="ri-error-warning-fill" style="color: var(--accent-rose);"></i>
+            <span id="settingsValidationMsg">Value must be between 0 and 100%.</span>
+          </div>
+
+          <div class="grid-2">
+            <!-- Configuration Card -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ri-settings-3-line"></i> <span>Configuration</span></div>
+              </div>
+              
+              <div class="form-group">
+                <label for="setLowPercent">Low Water Threshold (%)</label>
+                <input type="number" min="0" max="100" class="form-control" id="setLowPercent" value="20" required>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Triggers pump start when water drops to this level.</div>
+              </div>
+
+              <div class="form-group">
+                <label for="setFullPercent">Full Water Threshold (%)</label>
+                <input type="number" min="0" max="100" class="form-control" id="setFullPercent" value="85" required>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Stops pump automatically when tank fills to this level.</div>
+              </div>
+
+              <div class="form-group">
+                <label for="setOverflowPercent">Emergency Overflow Threshold (%)</label>
+                <input type="number" min="0" max="100" class="form-control" id="setOverflowPercent" value="95" required>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Triggers emergency alarm & safety pump shutoff.</div>
+              </div>
+
+              <div class="form-group">
+                <label for="setMaxRuntime">Max Continuous Pump Runtime (Minutes)</label>
+                <input type="number" min="5" max="120" class="form-control" id="setMaxRuntime" value="30" required>
+              </div>
+            </div>
+
+            <!-- Buzzer & System Config Card -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ri-volume-up-line"></i> <span>Buzzer & System Parameters</span></div>
+              </div>
+
+              <div class="form-group">
+                <div class="toggle-switch-wrapper">
+                  <span class="switch-label">Enable Physical Buzzer Sounder</span>
+                  <label class="switch-toggle">
+                    <input type="checkbox" id="setBuzzerEnabled" checked>
+                    <span class="switch-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="setBuzzerDuration">Alarm Sound Duration (Seconds)</label>
+                <input type="number" min="5" max="300" class="form-control" id="setBuzzerDuration" value="60">
+              </div>
+
+              <div class="form-group">
+                <label for="setDeviceName">System Device Name</label>
+                <input type="text" class="form-control" id="setDeviceName" value="ESP32 Node-01 (Main Tank Controller)">
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 16px; margin-top: 24px;">
+            <button type="submit" class="btn-primary" style="flex: 2;"><i class="ri-save-line"></i> Save All Settings</button>
+            <button type="button" class="btn-action off" id="btnResetSettings" style="flex: 1;"><i class="ri-refresh-line"></i> Reset Factory Defaults</button>
+          </div>
+        </form>
+
+        <!-- Admin Security & Password Change Card -->
+        <div class="card hidden" id="adminPasswordChangeCard" style="margin-top: 24px; display: none;">
+          <div class="card-header">
+            <div class="card-title"><i class="ri-lock-password-line"></i> <span>Admin Security & Password Change</span></div>
+          </div>
+          <form id="changePasswordForm">
+            <div class="login-error hidden" id="changePwErrorBox" style="margin-bottom: 16px;">
+              <i class="ri-error-warning-fill"></i> <span id="changePwErrorText"></span>
+            </div>
+            <div class="login-success hidden" id="changePwSuccessBox" style="margin-bottom: 16px;">
+              <i class="ri-checkbox-circle-fill"></i> <span id="changePwSuccessText"></span>
+            </div>
+            <div class="form-group">
+              <label for="currPassword">Current Password</label>
+              <div class="input-with-icon">
+                <i class="ri-lock-line"></i>
+                <input type="password" class="form-control" id="currPassword" placeholder="Enter current password" required>
+                <button type="button" class="btn-toggle-pw" data-toggle-pw="currPassword"><i class="ri-eye-line"></i></button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="newPassword">New Password</label>
+              <div class="input-with-icon">
+                <i class="ri-lock-password-line"></i>
+                <input type="password" class="form-control" id="newPassword" placeholder="Enter new password" required>
+                <button type="button" class="btn-toggle-pw" data-toggle-pw="newPassword"><i class="ri-eye-line"></i></button>
+              </div>
+              <div class="pw-reqs">At least 8 chars, 1 uppercase, 1 lowercase, 1 number</div>
+            </div>
+            <div class="form-group">
+              <label for="confirmNewPassword">Confirm New Password</label>
+              <div class="input-with-icon">
+                <i class="ri-lock-check-line"></i>
+                <input type="password" class="form-control" id="confirmNewPassword" placeholder="Confirm new password" required>
+                <button type="button" class="btn-toggle-pw" data-toggle-pw="confirmNewPassword"><i class="ri-eye-line"></i></button>
+              </div>
+            </div>
+            <div style="margin-top: 16px;">
+              <button type="submit" class="btn-primary" id="btnChangePwSubmit" style="max-width: 240px;">
+                <i class="ri-key-line"></i> <span id="btnChangePwText">Update Password</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
+
+      <!-- ================= 7. HELP & ABOUT VIEW ================= -->
+      <main class="dashboard-content page-view" id="view-help">
+
+        <!-- Header Card: About SmartWater System -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="ri-information-line"></i>
+              <span>About the System</span>
+            </div>
+          </div>
+          <div class="about-hero-box">
+            <div class="about-hero-title">SmartWater System</div>
+            <div class="about-hero-subtitle">Smart Water Level Monitoring & Automation System</div>
+            <p class="about-description">
+              The system monitors water level using a water-level sensor connected to an ESP32 and automatically controls the water pump according to configured thresholds.
+            </p>
+
+            <div class="system-flow-container">
+              <div class="flow-step">
+                <div class="flow-icon"><i class="ri-water-percent-line"></i></div>
+                <div class="flow-label">Water Level Sensor</div>
+              </div>
+              <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+              <div class="flow-step">
+                <div class="flow-icon"><i class="ri-cpu-line"></i></div>
+                <div class="flow-label">ESP32</div>
+              </div>
+              <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+              <div class="flow-step">
+                <div class="flow-icon"><i class="ri-wifi-line"></i></div>
+                <div class="flow-label">Wi-Fi / Backend</div>
+              </div>
+              <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+              <div class="flow-step">
+                <div class="flow-icon"><i class="ri-dashboard-3-line"></i></div>
+                <div class="flow-label">SmartWater Dashboard</div>
+              </div>
+              <div class="flow-arrow"><i class="ri-arrow-right-line"></i></div>
+              <div class="flow-step">
+                <div class="flow-icon"><i class="ri-shut-down-line"></i></div>
+                <div class="flow-label">Pump / Buzzer Control</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: How the System Works -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="ri-git-commit-line"></i>
+              <span>How the System Works</span>
+            </div>
+          </div>
+          <div class="steps-grid">
+            <div class="step-card">
+              <div class="step-number">01</div>
+              <div class="step-content">
+                <h4>Step 1 — Water Level Monitoring</h4>
+                <p>The water-level sensor measures the current water level.</p>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-number">02</div>
+              <div class="step-content">
+                <h4>Step 2 — ESP32 Processing</h4>
+                <p>The ESP32 reads the sensor value and sends telemetry to the backend.</p>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-number">03</div>
+              <div class="step-content">
+                <h4>Step 3 — Dashboard Monitoring</h4>
+                <p>The dashboard displays the latest actual water level, pump status, buzzer status, and device connection status.</p>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-number">04</div>
+              <div class="step-content">
+                <h4>Step 4 — Automatic Pump Control</h4>
+                <p>When Auto mode is enabled, the configured thresholds determine when the pump starts and stops.</p>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-number">05</div>
+              <div class="step-content">
+                <h4>Step 5 — Safety Monitoring</h4>
+                <p>If the emergency overflow threshold is reached, the system triggers the appropriate safety action and alarm.</p>
+              </div>
+            </div>
+            <div class="step-card">
+              <div class="step-number">06</div>
+              <div class="step-content">
+                <h4>Step 6 — Notifications</h4>
+                <p>Important system events and emergency conditions can generate notifications and email alerts according to the user's notification preferences.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Hardware Components -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="ri-hard-drive-2-line"></i>
+              <span>Hardware Components</span>
+            </div>
+          </div>
+          <div class="hardware-grid">
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-cpu-line"></i></div>
+              <div class="hw-info">
+                <strong>ESP32 38-Pin</strong>
+                <span>Main controller and Wi-Fi communication</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-water-flash-line"></i></div>
+              <div class="hw-info">
+                <strong>Water Level Sensor</strong>
+                <span>Measures water level</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-function-line"></i></div>
+              <div class="hw-info">
+                <strong>L293D H-Bridge</strong>
+                <span>Controls the pump motor</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-restart-line"></i></div>
+              <div class="hw-info">
+                <strong>DC Water Pump / Motor</strong>
+                <span>Moves water</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-volume-up-line"></i></div>
+              <div class="hw-info">
+                <strong>Buzzer</strong>
+                <span>Provides audible alerts</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-grid-fill"></i></div>
+              <div class="hw-info">
+                <strong>Breadboard</strong>
+                <span>Prototyping and connections</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-links-line"></i></div>
+              <div class="hw-info">
+                <strong>Jumper Wires</strong>
+                <span>Electrical connections</span>
+              </div>
+            </div>
+            <div class="hardware-card">
+              <div class="hw-icon"><i class="ri-plug-line"></i></div>
+              <div class="hw-info">
+                <strong>External Power Supply/Battery</strong>
+                <span>Powers the required hardware</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Configuration & Thresholds -->
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <i class="ri-sliders-line"></i>
+                <span>Configuration & Thresholds</span>
+              </div>
+            </div>
+            <div class="thresholds-guide-body">
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                The SmartWater system relies on three primary thresholds configured in <strong>Settings &rarr; Configuration</strong>:
+              </p>
+
+              <div class="threshold-guide-item">
+                <div class="threshold-tag low">Low Water Threshold</div>
+                <p>When the water level reaches or falls below this value, Auto mode can start the pump.</p>
+              </div>
+
+              <div class="threshold-guide-item">
+                <div class="threshold-tag full">Full Water Threshold</div>
+                <p>When the water level reaches or exceeds this value, Auto mode stops the pump.</p>
+              </div>
+
+              <div class="threshold-guide-item">
+                <div class="threshold-tag overflow">Emergency Overflow Threshold</div>
+                <p>When the water level reaches or exceeds this value, the system treats it as an emergency/overflow condition and performs the configured safety action.</p>
+              </div>
+
+              <div class="formula-box">
+                <div class="formula-label">Required Relationship</div>
+                <div class="formula-text">Low Threshold &lt; Full Threshold &le; Emergency Threshold</div>
+                <div class="formula-sub">Valid threshold range: <strong>0–100%</strong></div>
+              </div>
+
+              <div class="note-box">
+                <i class="ri-information-fill"></i>
+                <span>Settings &rarr; Configuration remains the only place where thresholds are changed.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Device Status Guide -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <i class="ri-signal-tower-line"></i>
+                <span>Device Status Guide</span>
+              </div>
+            </div>
+            <div class="status-guide-body">
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                Device statuses reflect real-time telemetry from connected hardware:
+              </p>
+
+              <div class="status-guide-item">
+                <span class="status-pill normal">Connected</span>
+                <p>The device is communicating with the backend and recent telemetry/heartbeat has been received.</p>
+              </div>
+
+              <div class="status-guide-item">
+                <span class="status-pill overflow">Not Connected</span>
+                <p>No valid recent communication has been received from the ESP32.</p>
+              </div>
+
+              <div class="status-guide-item">
+                <span class="status-pill low">Not Available</span>
+                <p>The system does not currently have enough actual device information to report that component's status.</p>
+              </div>
+
+              <div class="note-box" style="margin-top: 16px;">
+                <i class="ri-shield-keyhole-line"></i>
+                <span>Important: Opening this page does not report a device as connected unless confirmed by actual backend heartbeat telemetry.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Alerts & Notifications Guide -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="ri-notification-badge-line"></i>
+              <span>Alerts & Notifications Guide</span>
+            </div>
+          </div>
+          <div class="alerts-guide-body">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+              The system monitors events and dispatches notifications for critical state changes:
+            </p>
+
+            <div class="events-grid">
+              <div class="event-chip"><i class="ri-alert-line" style="color: var(--accent-amber);"></i> Low Water Alert</div>
+              <div class="event-chip"><i class="ri-checkbox-circle-line" style="color: var(--accent-blue);"></i> Full Tank Event</div>
+              <div class="event-chip"><i class="ri-alarm-warning-line" style="color: var(--accent-rose);"></i> Emergency Overflow Alert</div>
+              <div class="event-chip"><i class="ri-play-circle-line" style="color: var(--accent-emerald);"></i> Pump Started</div>
+              <div class="event-chip"><i class="ri-stop-circle-line" style="color: var(--accent-rose);"></i> Pump Stopped</div>
+              <div class="event-chip"><i class="ri-wifi-line" style="color: var(--accent-emerald);"></i> ESP32 Connected</div>
+              <div class="event-chip"><i class="ri-wifi-off-line" style="color: var(--accent-rose);"></i> ESP32 Disconnected</div>
+              <div class="event-chip"><i class="ri-settings-line" style="color: var(--accent-cyan);"></i> System/Configuration Events</div>
+            </div>
+
+            <div class="note-box" style="margin-top: 16px;">
+              <i class="ri-error-warning-line"></i>
+              <span>Reading a notification as "read" does <strong>not</strong> turn off a physical alarm, pump, or safety condition.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Troubleshooting -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i class="ri-tools-line"></i>
+              <span>Troubleshooting</span>
+            </div>
+          </div>
+          <div class="troubleshooting-container">
+
+            <div class="accordion-item active">
+              <div class="accordion-header">
+                <div class="accordion-title">
+                  <i class="ri-wifi-off-line" style="color: var(--accent-rose);"></i>
+                  <strong>ESP32 Not Connected</strong>
+                </div>
+                <i class="ri-chevron-down-line accordion-arrow"></i>
+              </div>
+              <div class="accordion-content">
+                <ul>
+                  <li>Verify ESP32 power.</li>
+                  <li>Verify Wi-Fi connection.</li>
+                  <li>Check the backend is running.</li>
+                  <li>Check the ESP32 is sending telemetry.</li>
+                  <li>Check the device ID/configuration.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <div class="accordion-header">
+                <div class="accordion-title">
+                  <i class="ri-water-flash-line" style="color: var(--accent-amber);"></i>
+                  <strong>Water Level Not Updating</strong>
+                </div>
+                <i class="ri-chevron-down-line accordion-arrow"></i>
+              </div>
+              <div class="accordion-content">
+                <ul>
+                  <li>Verify sensor wiring.</li>
+                  <li>Verify sensor power.</li>
+                  <li>Check ESP32 sensor readings.</li>
+                  <li>Check ESP32-to-backend communication.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <div class="accordion-header">
+                <div class="accordion-title">
+                  <i class="ri-shut-down-line" style="color: var(--accent-blue);"></i>
+                  <strong>Pump Not Starting</strong>
+                </div>
+                <i class="ri-chevron-down-line accordion-arrow"></i>
+              </div>
+              <div class="accordion-content">
+                <ul>
+                  <li>Verify Auto mode is enabled.</li>
+                  <li>Check the configured Low Water Threshold.</li>
+                  <li>Check L293D connections.</li>
+                  <li>Check motor/pump power supply.</li>
+                  <li>Check whether an emergency safety condition has stopped the pump.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <div class="accordion-header">
+                <div class="accordion-title">
+                  <i class="ri-mail-unread-line" style="color: var(--accent-purple);"></i>
+                  <strong>Email Notification Not Received</strong>
+                </div>
+                <i class="ri-chevron-down-line accordion-arrow"></i>
+              </div>
+              <div class="accordion-content">
+                <ul>
+                  <li>Verify the registered email address.</li>
+                  <li>Check Notification preferences.</li>
+                  <li>Check spam/junk folder.</li>
+                  <li>Verify backend email/SMTP configuration.</li>
+                  <li>Check backend email-service errors.</li>
+                </ul>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Quick Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 style="font-size: 18px; font-weight: 700;"><i class="ri-settings-4-line"></i> Configure Thresholds</h3>
+        <button class="close-btn" id="closeSettingsBtn">&times;</button>
+      </div>
+
+      <div class="stale-banner hidden" id="modalValidationError" style="margin-bottom: 16px; background: rgba(244, 63, 94, 0.15); border-color: var(--accent-rose); color: #fecdd3; padding: 10px 14px;">
+        <i class="ri-error-warning-fill" style="color: var(--accent-rose); font-size: 18px;"></i>
+        <span id="modalValidationMsg" style="font-size: 13px;">Value must be between 0 and 100%.</span>
+      </div>
+
+      <form id="thresholdsForm">
+        <div class="form-group">
+          <label for="inputLowPercent">Low Water Threshold (%)</label>
+          <input type="number" min="0" max="100" class="form-control" id="inputLowPercent" value="20" required>
+        </div>
+        <div class="form-group">
+          <label for="inputFullPercent">Full Water Threshold (%)</label>
+          <input type="number" min="0" max="100" class="form-control" id="inputFullPercent" value="85" required>
+        </div>
+        <div class="form-group">
+          <label for="inputOverflowPercent">Emergency Overflow Threshold (%)</label>
+          <input type="number" min="0" max="100" class="form-control" id="inputOverflowPercent" value="95" required>
+        </div>
+        <div class="form-group">
+          <label for="inputCapacity">Tank Capacity (Liters)</label>
+          <input type="number" min="100" max="10000" class="form-control" id="inputCapacity" value="1000" required>
+        </div>
+        <button type="submit" class="btn-primary">Save Configuration</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- View All Notifications Modal -->
+  <div class="modal-overlay" id="viewAllNotificationsModal">
+    <div class="modal-box" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 style="font-size: 18px; font-weight: 700;"><i class="ri-notification-3-line"></i> All Unread Notifications</h3>
+        <button class="close-btn" id="closeViewAllModalBtn">&times;</button>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <span style="font-size: 13px; color: var(--text-muted);" id="viewAllUnreadCountLabel">0 unread notifications</span>
+        <button class="btn-tab" id="btnMarkAllReadModal" style="font-size: 12px; padding: 4px 10px;"><i class="ri-check-double-line"></i> Mark All as Read</button>
+      </div>
+
+      <div class="alerts-feed" id="viewAllUnreadList" style="max-height: 400px; overflow-y: auto;">
+        <!-- Dynamically generated list of unread notifications -->
+      </div>
+    </div>
+  </div>
+
+  <!-- App Script -->
+  <script src="js/app.js"></script>
+</body>
+</html>

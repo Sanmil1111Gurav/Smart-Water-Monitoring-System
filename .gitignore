@@ -1,0 +1,22 @@
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
+
+# Logs
+*.log
+
+# SQLite database
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary/development files
+scratch/
+
+# OS files
+.DS_Store
+Thumbs.db
