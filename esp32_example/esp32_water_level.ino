@@ -1,11 +1,18 @@
 /*
-  ESP32 Water Level Monitoring & L293D Pump Driver System
-  -------------------------------------------------------
+  ESP32 Water Level Monitoring System (Analog Water Sensor)
+  ---------------------------------------------------------
   Hardware Components:
   1. ESP32 Development Board
-  2. Ultrasonic Sensor HC-SR04 (Trig = GPIO 5, Echo = GPIO 18)
-  3. L293D Motor Driver (Enable1 = GPIO 14, IN1 = GPIO 27, IN2 = GPIO 26)
-  4. Piezo Buzzer (GPIO 19)
+  2. Water Sensor:
+      S → GPIO34
+      + → 3.3V
+      - → GND
+  3. L293D:
+EN1 → GPIO25
+IN1 → GPIO26
+IN2 → GPIO27
+  4. Buzzer:
+  → GPIO14
   5. DC Water Pump Motor (Connected to L293D Output 1 & 2)
 
   Sends HTTP REST Telemetry JSON to Dashboard Server (/api/telemetry)
@@ -17,25 +24,24 @@
 #include <ArduinoJson.h> // Ensure ArduinoJson library is installed in Arduino IDE
 
 // Wi-Fi Credentials
-const char* ssid = "YOUR_WIFI_SSID";
-const char* password = "YOUR_WIFI_PASSWORD";
+const char* ssid = "Sanmil";
+const char* password = "sanmil123";
 
-// Backend Dashboard Server URL (Replace IP with your computer's IP address)
-const char* serverUrl = "http://192.168.1.100:5000/api/telemetry";
+// Backend Dashboard Server URL
+const char* serverUrl = "http://10.18.169.252:5000/api/telemetry";
 
 // Pin Definitions
-#define TRIG_PIN 5
-#define ECHO_PIN 18
-#define BUZZER_PIN 19
+#define WATER_SENSOR_PIN 34 // ESP32 ADC Pin (GPIO 34) connected to Water Sensor Signal Output
+#define BUZZER_PIN 14
 
 // L293D Motor Driver Pins
-#define L293D_ENABLE 14
-#define L293D_IN1 27
-#define L293D_IN2 26
+#define L293D_ENABLE 25
+#define L293D_IN1 26
+#define L293D_IN2 27
 
-// Tank Geometry Constants
-const float TANK_TOTAL_DEPTH_CM = 100.0; // Distance from sensor to bottom of empty tank (cm)
-const float SENSOR_OFFSET_CM = 5.0;       // Minimum sensor blind distance at 100% full (cm)
+// Sensor Calibration (Adjust these values based on Serial Monitor output when dry vs submerged)
+const int SENSOR_MIN_RAW = 0;    // Raw reading when sensor is completely dry (Empty Tank)
+const int SENSOR_MAX_RAW = 2500; // Raw reading when sensor is submerged in water (Full Tank)
 
 // System State
 String pumpMode = "AUTO";
@@ -54,25 +60,21 @@ void setPumpMotorState(bool turnOn) {
   }
 }
 
-float measureDistanceCm() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH, 30000); // 30ms timeout
-  if (duration == 0) return TANK_TOTAL_DEPTH_CM;  // Fallback if no echo
-
-  float distanceCm = (duration * 0.0343) / 2.0;
-  return distanceCm;
+// Multi-sample averaged analog reading for smooth percentage calculation
+int readAnalogWaterLevel() {
+  long sum = 0;
+  for (int i = 0; i < 10; i++) {
+    sum += analogRead(WATER_SENSOR_PIN);
+    delay(5);
+  }
+  return (int)(sum / 10);
 }
 
-int calculateWaterPercent(float distanceCm) {
-  float waterHeightCm = TANK_TOTAL_DEPTH_CM - distanceCm;
-  float maxWaterHeightCm = TANK_TOTAL_DEPTH_CM - SENSOR_OFFSET_CM;
-  
-  float percent = (waterHeightCm / maxWaterHeightCm) * 100.0;
+int calculateWaterPercent(int rawAnalogValue) {
+  if (rawAnalogValue <= SENSOR_MIN_RAW) return 0;
+  if (rawAnalogValue >= SENSOR_MAX_RAW) return 100;
+
+  float percent = ((float)(rawAnalogValue - SENSOR_MIN_RAW) / (float)(SENSOR_MAX_RAW - SENSOR_MIN_RAW)) * 100.0;
   if (percent > 100.0) percent = 100.0;
   if (percent < 0.0) percent = 0.0;
   return (int)percent;
@@ -81,8 +83,10 @@ int calculateWaterPercent(float distanceCm) {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
+  // Configure Analog Pin
+  pinMode(WATER_SENSOR_PIN, INPUT);
+  analogReadResolution(12); // 12-bit resolution (0 - 4095)
+
   pinMode(BUZZER_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW);
 
@@ -91,54 +95,83 @@ void setup() {
   pinMode(L293D_IN2, OUTPUT);
   setPumpMotorState(false);
 
-  Serial.println("\nConnecting to Wi-Fi...");
+  Serial.println("\n-------------------------------------------");
+  Serial.println("💧 ESP32 Water Level Monitoring System (Analog Sensor)");
+  Serial.println("-------------------------------------------");
+  Serial.printf("Connecting to Wi-Fi: %s\n", ssid);
+  
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
     delay(500);
     Serial.print(".");
+    attempts++;
   }
-  Serial.println("\nWi-Fi Connected!");
-  Serial.print("ESP32 IP Address: ");
-  Serial.println(WiFi.localIP());
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ Wi-Fi Connected!");
+    Serial.print("ESP32 IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n⚠️ Wi-Fi Connection failed. Will retry in main loop.");
+  }
 }
 
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
-    float distanceCm = measureDistanceCm();
-    int waterPercent = calculateWaterPercent(distanceCm);
-    int rssi = WiFi.RSSI();
+  // Auto-reconnect if Wi-Fi drops
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("⚠️ Wi-Fi disconnected. Reconnecting...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    delay(2000);
+    return;
+  }
 
-    Serial.printf("Distance: %.1f cm | Water Level: %d%% | RSSI: %d dBm\n", distanceCm, waterPercent, rssi);
+  int rawAnalog = readAnalogWaterLevel();
+  int waterPercent = calculateWaterPercent(rawAnalog);
+  int rssi = WiFi.RSSI();
 
-    // Prepare JSON Telemetry Payload
-    HTTPClient http;
-    http.begin(serverUrl);
-    http.addHeader("Content-Type", "application/json");
+  Serial.printf("📊 Sensor Raw ADC: %d | Water Level: %d%% | RSSI: %d dBm\n", rawAnalog, waterPercent, rssi);
 
-    StaticJsonDocument<256> doc;
-    doc["waterLevelPercent"] = waterPercent;
-    doc["distanceCm"] = (int)distanceCm;
-    doc["wifiRssi"] = rssi;
-    doc["temp"] = 31.5; // Optional DHT sensor value
-    doc["humidity"] = 60;
+  // Prepare JSON Telemetry Payload
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "application/json");
 
-    String requestBody;
-    serializeJson(doc, requestBody);
+  StaticJsonDocument<384> doc;
+  doc["type"] = "TELEMETRY";
+  doc["deviceId"] = "ESP32-001";
+  doc["waterLevelPercent"] = waterPercent;
+  doc["sensorValue"] = rawAnalog;
+  doc["pumpStatus"] = targetPumpStatus;
+  doc["pumpMode"] = pumpMode;
+  doc["buzzerStatus"] = buzzerAlarmActive ? "ALARM" : "QUIET";
+  doc["lowThreshold"] = 20;
+  doc["fullThreshold"] = 85;
+  doc["emergencyThreshold"] = 95;
+  doc["wifiRssi"] = rssi;
+  doc["uptime"] = millis() / 1000;
+  doc["firmware"] = "SmartWater-ESP32-1.0.2";
 
-    int httpResponseCode = http.POST(requestBody);
+  String requestBody;
+  serializeJson(doc, requestBody);
 
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      StaticJsonDocument<512> respDoc;
-      deserializeJson(respDoc, response);
+  int httpResponseCode = http.POST(requestBody);
 
-      // Parse Command Response from Dashboard Server
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    StaticJsonDocument<512> respDoc;
+    DeserializationError error = deserializeJson(respDoc, response);
+
+    if (!error) {
       if (respDoc.containsKey("targetPumpStatus")) {
         targetPumpStatus = respDoc["targetPumpStatus"].as<String>();
         pumpMode = respDoc["pumpMode"].as<String>();
         buzzerAlarmActive = respDoc["buzzerActive"].as<bool>();
 
-        // Actuate L293D Pump Motor based on server state
+        // Actuate L293D Pump Motor based on server command
         if (targetPumpStatus == "ON") {
           setPumpMotorState(true);
         } else {
@@ -152,11 +185,14 @@ void loop() {
           digitalWrite(BUZZER_PIN, LOW);
         }
       }
-    } else {
-      Serial.printf("HTTP Error sending telemetry: %d\n", httpResponseCode);
+      Serial.printf("📡 Telemetry Sent OK (HTTP %d) | Pump: %s (%s)\n", httpResponseCode, targetPumpStatus.c_str(), pumpMode.c_str());
     }
-    http.end();
+  } else {
+    Serial.printf("❌ HTTP Error sending telemetry: %d (%s)\n", httpResponseCode, http.errorToString(httpResponseCode).c_str());
   }
+  http.end();
 
-  delay(1000); // 1-second telemetry loop
+  delay(1000); // Send telemetry loop every 1 second
 }
+
+

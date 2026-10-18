@@ -409,7 +409,7 @@
             <div class="metric-data">
               <div class="metric-label">Today's Usage</div>
               <div class="metric-value" id="valTodayUsage">450 L</div>
-              <div style="font-size: 11px; color: var(--text-muted);">Water Consumed</div>
+              <div style="font-size: 11px; color: var(--text-muted);">Estimated Water Usage</div>
             </div>
           </div>
 
@@ -417,8 +417,8 @@
             <div class="metric-icon alerts"><i class="ri-alert-line"></i></div>
             <div class="metric-data">
               <div class="metric-label">Alerts</div>
-              <div class="metric-value" id="valAlertsCount">2</div>
-              <div style="font-size: 11px; color: var(--accent-amber); font-weight: 600;">Need Attention</div>
+              <div class="metric-value" id="valAlertsCount">0</div>
+              <div style="font-size: 11px; font-weight: 600;" id="valAlertsSubtext">No Active Alerts</div>
             </div>
           </div>
         </section>
@@ -443,8 +443,8 @@
               </div>
               <div class="tank-stats-row">
                 <div class="tank-stat-item"><div class="val" id="statCapacity">1000 L</div><div class="lbl">Tank Capacity</div></div>
-                <div class="tank-stat-item"><div class="val" id="statCurrentLiters">780 L</div><div class="lbl">Current Volume</div></div>
-                <div class="tank-stat-item"><div class="val" id="statRawDistance">22 cm</div><div class="lbl">Sensor Depth</div></div>
+                <div class="tank-stat-item"><div class="val" id="statCurrentLiters">0 L</div><div class="lbl">Current Volume</div></div>
+                <div class="tank-stat-item"><div class="val" id="statRawDistance">0</div><div class="lbl">Sensor Value</div></div>
               </div>
             </div>
           </div>
@@ -513,16 +513,16 @@
               <div class="device-item">
                 <div class="device-info">
                   <div class="device-icon"><i class="ri-radar-line"></i></div>
-                  <div><div class="device-name">Ultrasonic Sensor (HC-SR04)</div><div class="device-sub" id="devSensorDetail">Reading: 22 cm distance</div></div>
+                  <div><div class="device-name">Water Level Sensor</div><div class="device-sub" id="devSensorDetail">Sensor Value: 0</div></div>
                 </div>
-                <div class="status-pill normal">NORMAL</div>
+                <div class="status-pill normal" id="devSensorStatusPill">ACTIVE</div>
               </div>
               <div class="device-item">
                 <div class="device-info">
                   <div class="device-icon"><i class="ri-wifi-line"></i></div>
-                  <div><div class="device-name">Wi-Fi Module</div><div class="device-sub" id="devWifiDetail">Signal Strength: -52 dBm</div></div>
+                  <div><div class="device-name">Wi-Fi Module</div><div class="device-sub" id="devWifiDetail">Signal Strength: Data unavailable</div></div>
                 </div>
-                <div class="status-pill normal">ONLINE</div>
+                <div class="status-pill normal" id="devWifiStatusPill">ONLINE</div>
               </div>
               <div class="device-item">
                 <div class="device-info">
@@ -566,10 +566,9 @@
                 <div class="card-title"><i class="ri-heart-pulse-line"></i> <span>System Health</span></div>
               </div>
               <div class="health-grid">
-                <div class="health-card"><i class="ri-temp-cold-line"></i><div class="health-val" id="valTemp">31.4°C</div><div class="health-lbl">Temperature</div></div>
-                <div class="health-card"><i class="ri-mist-line"></i><div class="health-val" id="valHumidity">62%</div><div class="health-lbl">Humidity</div></div>
-                <div class="health-card"><i class="ri-timer-line"></i><div class="health-val" id="valUptime">3d 12h</div><div class="health-lbl">Uptime</div></div>
-                <div class="health-card"><i class="ri-signal-tower-line"></i><div class="health-val" id="valSignal">-52 dBm</div><div class="health-lbl">Signal Strength</div></div>
+                <div class="health-card"><i class="ri-wifi-line"></i><div class="health-val" id="valConnection">N/A</div><div class="health-lbl">System Connection</div></div>
+                <div class="health-card"><i class="ri-timer-line"></i><div class="health-val" id="valUptime">N/A</div><div class="health-lbl">Uptime</div></div>
+                <div class="health-card"><i class="ri-signal-tower-line"></i><div class="health-val" id="valSignal">N/A</div><div class="health-lbl">Signal Strength</div></div>
               </div>
             </div>
           </div>
@@ -604,19 +603,19 @@
             </div>
           </div>
 
-          <!-- Ultrasonic Sensor Card -->
+          <!-- Water Level Sensor Card -->
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ri-radar-line"></i> <span>Water Level Sensor (HC-SR04)</span></div>
-              <span class="status-pill normal" id="devCardSensorPill">HEALTHY</span>
+              <div class="card-title"><i class="ri-radar-line"></i> <span>Water Level Sensor</span></div>
+              <span class="status-pill normal" id="devCardSensorPill">ACTIVE</span>
             </div>
             <div class="device-details-body">
-              <div class="detail-row"><span>Sensor Type:</span><strong>Ultrasonic Distance (HC-SR04)</strong></div>
-              <div class="detail-row"><span>Raw Sensor Depth:</span><strong id="dSensorRaw">22 cm</strong></div>
-              <div class="detail-row"><span>Calculated Level:</span><strong id="dSensorPercent">78%</strong></div>
-              <div class="detail-row"><span>Sensor Health:</span><strong id="dSensorHealth" style="color: var(--accent-emerald);">100% Optimal</strong></div>
-              <div class="detail-row"><span>Last Reading:</span><strong id="dSensorLastReading">10:45:12 AM</strong></div>
-              <div class="detail-row"><span>Trig Pin / Echo Pin:</span><strong>GPIO 5 / GPIO 18</strong></div>
+              <div class="detail-row"><span>Sensor Type:</span><strong>Analog Water Level Sensor</strong></div>
+              <div class="detail-row"><span>Raw Sensor Value:</span><strong id="dSensorRaw">0</strong></div>
+              <div class="detail-row"><span>Calculated Level:</span><strong id="dSensorPercent">0%</strong></div>
+              <div class="detail-row"><span>Sensor Status:</span><strong id="dSensorHealth" style="color: var(--accent-emerald);">ACTIVE</strong></div>
+              <div class="detail-row"><span>Last Reading:</span><strong id="dSensorLastReading">Never</strong></div>
+              <div class="detail-row"><span>Signal Pin:</span><strong>GPIO 34 (ADC)</strong></div>
             </div>
           </div>
 
@@ -687,7 +686,7 @@
             <div class="metric-data">
               <div class="metric-label" id="anUsageLabel">Total Water Usage</div>
               <div class="metric-value" id="anTotalUsage">450 L</div>
-              <div style="font-size: 11px; color: var(--text-emerald); font-weight: 600;" id="anUsageSub">Optimal Efficiency</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="anUsageSub">Efficiency: N/A</div>
             </div>
           </div>
           <div class="metric-card">
@@ -748,7 +747,7 @@
                   <th>Category</th>
                   <th>Event Description</th>
                   <th>Water Level</th>
-                  <th>Sensor Depth</th>
+                  <th>Raw Sensor Value</th>
                   <th>Pump State</th>
                   <th>Mode</th>
                   <th>Buzzer Status</th>

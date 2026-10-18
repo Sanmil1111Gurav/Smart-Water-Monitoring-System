@@ -8,7 +8,20 @@ const { requireAuth } = require('../middleware/auth');
 router.get('/status', async (req, res) => {
   try {
     const db = getDb();
+    const configRow = await db.get('SELECT pump_mode FROM configuration WHERE id = 1');
+    const modeBefore = telemetryService.getState().pump.mode;
+    await telemetryService.calculateTodayUsageLiters();
     const state = telemetryService.getState();
+    const modeAfter = state.pump.mode;
+
+    console.log('[STATUS REQUEST]', {
+      PID: process.pid,
+      timestamp: new Date().toISOString(),
+      statePumpModeBefore: modeBefore,
+      sqlitePumpMode: configRow?.pump_mode,
+      statePumpModeAfter: modeAfter,
+      responsePumpMode: state.pump.mode
+    });
 
     const dbEvents = await db.all('SELECT * FROM events ORDER BY id DESC LIMIT 50');
     const history = dbEvents.map(e => ({
@@ -17,7 +30,7 @@ router.get('/status', async (req, res) => {
       date: new Date(e.timestamp).toLocaleDateString(),
       time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       waterLevelPercent: e.water_level_percentage,
-      distanceCm: e.distance_cm,
+      sensorValue: e.distance_cm !== undefined ? e.distance_cm : null,
       usageLiters: 0,
       pumpStatus: e.pump_status,
       mode: e.pump_mode,
@@ -80,7 +93,7 @@ router.post('/pump/control', requireAuth, async (req, res) => {
   const nowIso = new Date().toISOString();
 
   if (mode !== undefined && (mode === 'AUTO' || mode === 'MANUAL')) {
-    state.pump.mode = mode;
+    telemetryService.setPumpMode(mode, '/api/pump/control HTTP POST');
     await db.run('UPDATE configuration SET pump_mode = ?, updated_at = ? WHERE id = 1', [mode, nowIso]);
     await telemetryService.logActivity('Pump Mode Changed', `Switched pump control mode to ${mode}`, 'warning', 'sliders');
   }

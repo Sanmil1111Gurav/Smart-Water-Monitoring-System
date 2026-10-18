@@ -19,7 +19,7 @@ function getTransporter() {
   const host = (process.env.EMAIL_HOST || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
   const port = parseInt((process.env.EMAIL_PORT || process.env.SMTP_PORT || '587').toString().trim(), 10);
   const user = (process.env.EMAIL_USERNAME || process.env.EMAIL_USER || process.env.SMTP_USER || process.env.SMTP_USERNAME || '').trim();
-  const pass = (process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '').trim();
+  const pass = ((process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS || process.env.SMTP_PASS || process.env.SMTP_PASSWORD || '').replace(/\s+/g, '')).trim();
 
   if (!host || !user || !pass) {
     throw new Error('SMTP credentials missing. Please set EMAIL_HOST, EMAIL_USERNAME, and EMAIL_PASSWORD in .env file.');
@@ -166,7 +166,7 @@ Device: ${deviceName} (ESP32-001)
 Status: ${status}
 Water Level: ${level !== null ? level + '%' : 'Not available'} (${state.sensor.currentLiters || 0} / ${state.sensor.tankCapacityLiters} Liters)
 Emergency Threshold: ${state.thresholds.overflowPercent}%
-Sensor Depth: ${state.sensor.distanceCm !== null ? state.sensor.distanceCm + ' cm' : 'Not available'}
+Sensor Value: ${state.sensor.sensorValue !== null && state.sensor.sensorValue !== undefined ? state.sensor.sensorValue : 'Not available'}
 Pump Status: ${state.pump.status} (Mode: ${state.pump.mode})
 Buzzer Status: ${state.buzzer.active ? 'ALARM ACTIVE' : 'QUIET'}
 Details: ${eventDetails}
@@ -264,12 +264,95 @@ function getPreviousCompletedDateString(timezone = 'Asia/Kolkata') {
 }
 
 /**
+ * Helper to get date string YYYY-MM-DD for today in specified timezone
+ */
+function getTodayDateString(timezone = 'Asia/Kolkata') {
+  const now = new Date();
+  const options = { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' };
+  const [{ value: month },,{ value: day },,{ value: year }] = new Intl.DateTimeFormat('en-US', options).formatToParts(now);
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Calculate UTC ISO start & end boundaries for a given YYYY-MM-DD date in a specified IANA timezone.
+ */
+function getTimezoneDayBoundaries(dateStr, timeZone = 'Asia/Kolkata') {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const estimateUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const getOffsetMs = (date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    const p = {};
+    parts.forEach(pt => { p[pt.type] = pt.value; });
+    const hour = +p.hour === 24 ? 0 : +p.hour;
+    const localDate = new Date(Date.UTC(+p.year, +p.month - 1, +p.day, hour, +p.minute, +p.second));
+    return localDate.getTime() - date.getTime();
+  };
+
+  const offsetMs = getOffsetMs(estimateUtc);
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs;
+  const endUtcMs = Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs;
+
+  return {
+    startIso: new Date(startUtcMs).toISOString(),
+    endIso: new Date(endUtcMs).toISOString(),
+    startSql: new Date(startUtcMs).toISOString().replace('T', ' ').replace('Z', ''),
+    endSql: new Date(endUtcMs).toISOString().replace('T', ' ').replace('Z', ''),
+    startMs: startUtcMs,
+    endMs: endUtcMs
+  };
+}
+
+/**
  * Generate Daily Digest Email for Previous Completed Day with Duplicate Protection
  */
 async function sendDailyDigest(userId = null, targetDateStr = null, isManualTrigger = false) {
   const db = getDb();
   const timezone = process.env.TIMEZONE || 'Asia/Kolkata';
-  const digestDate = targetDateStr || getPreviousCompletedDateString(timezone);
+
+  let digestDate = targetDateStr;
+
+  if (!digestDate) {
+    const yesterdayStr = getPreviousCompletedDateString(timezone);
+    const yesterdayBounds = getTimezoneDayBoundaries(yesterdayStr, timezone);
+    const yesterdayTelemetry = await db.all(
+      'SELECT water_level_percentage, timestamp FROM telemetry WHERE timestamp >= ? AND timestamp <= ?',
+      [yesterdayBounds.startIso, yesterdayBounds.endIso]
+    );
+
+    if (yesterdayTelemetry && yesterdayTelemetry.length > 0) {
+      digestDate = yesterdayStr;
+    } else {
+      const todayStr = getTodayDateString(timezone);
+      const todayBounds = getTimezoneDayBoundaries(todayStr, timezone);
+      const todayTelemetry = await db.all(
+        'SELECT water_level_percentage, timestamp FROM telemetry WHERE timestamp >= ? AND timestamp <= ?',
+        [todayBounds.startIso, todayBounds.endIso]
+      );
+
+      if (todayTelemetry && todayTelemetry.length > 0) {
+        digestDate = todayStr;
+      } else {
+        const latestRow = await db.get('SELECT timestamp FROM telemetry ORDER BY timestamp DESC LIMIT 1');
+        if (latestRow && latestRow.timestamp) {
+          const latestDate = new Date(latestRow.timestamp);
+          const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            year: 'numeric', month: '2-digit', day: '2-digit'
+          }).formatToParts(latestDate);
+          const p = {};
+          parts.forEach(pt => { p[pt.type] = pt.value; });
+          digestDate = `${p.year}-${p.month}-${p.day}`;
+        } else {
+          digestDate = yesterdayStr;
+        }
+      }
+    }
+  }
 
   let query = 'SELECT * FROM users WHERE email_notifications = 1 AND daily_digest = 1';
   let params = [];
@@ -302,14 +385,18 @@ async function sendDailyDigest(userId = null, targetDateStr = null, isManualTrig
     }
   }
 
-  const startDateIso = `${digestDate}T00:00:00.000Z`;
-  const endDateIso = `${digestDate}T23:59:59.999Z`;
+  const bounds = getTimezoneDayBoundaries(digestDate, timezone);
 
-  // Query actual telemetry data for target date
-  const telemetry = await db.all(
-    'SELECT water_level_percentage FROM telemetry WHERE timestamp >= ? AND timestamp <= ?',
-    [startDateIso, endDateIso]
+  // Query actual telemetry data for target date boundaries in timezone
+  const rawTelemetry = await db.all(
+    'SELECT water_level_percentage, timestamp FROM telemetry WHERE timestamp >= ? AND timestamp <= ?',
+    [bounds.startIso, bounds.endIso]
   );
+
+  const telemetry = rawTelemetry.filter(t => {
+    const tsMs = new Date(t.timestamp).getTime();
+    return !isNaN(tsMs) && tsMs >= bounds.startMs && tsMs <= bounds.endMs;
+  });
 
   let minLevel = 'Not available';
   let maxLevel = 'Not available';
@@ -317,7 +404,7 @@ async function sendDailyDigest(userId = null, targetDateStr = null, isManualTrig
   let telemetryCount = telemetry.length;
 
   if (telemetryCount > 0) {
-    const levels = telemetry.map(t => t.water_level_percentage).filter(l => l !== null);
+    const levels = telemetry.map(t => t.water_level_percentage).filter(l => l !== null && l !== undefined);
     if (levels.length > 0) {
       minLevel = `${Math.min(...levels)}%`;
       maxLevel = `${Math.max(...levels)}%`;
@@ -325,15 +412,36 @@ async function sendDailyDigest(userId = null, targetDateStr = null, isManualTrig
     }
   }
 
-  // Query actual event data for target date
-  const events = await db.all(
-    'SELECT category, event_type, event FROM events WHERE timestamp >= ? AND timestamp <= ?',
-    [startDateIso, endDateIso]
+  // Query actual event data for target date boundaries in timezone
+  const rawEvents = await db.all(
+    'SELECT category, event_type, event, timestamp FROM events WHERE timestamp >= ? AND timestamp <= ?',
+    [bounds.startIso, bounds.endIso]
   );
 
+  const events = rawEvents.filter(e => {
+    const tsMs = new Date(e.timestamp).getTime();
+    return !isNaN(tsMs) && tsMs >= bounds.startMs && tsMs <= bounds.endMs;
+  });
+
+  const pumpCount = events.filter(e => {
+    if (e.category !== 'Pump Events') return false;
+    const evt = (e.event_type || e.event || '').toLowerCase();
+    return evt.includes('started') || evt.includes('on') || evt.includes('activated');
+  }).length;
+
   const lowCount = events.filter(e => e.category === 'Alarm Events').length;
-  const pumpCount = events.filter(e => e.category === 'Pump Events').length;
   const systemCount = events.filter(e => e.category === 'System Events').length;
+
+  console.log(`📊 Daily Digest date: ${digestDate}`);
+  console.log(`🌐 Timezone: ${timezone}`);
+  console.log(`📡 Telemetry records found: ${telemetryCount}`);
+  console.log(`📋 Event records found: ${events.length}`);
+  console.log(`📉 Minimum level: ${minLevel}`);
+  console.log(`📈 Maximum level: ${maxLevel}`);
+  console.log(`📊 Average level: ${avgLevel}`);
+  console.log(`⚙️ Pump Activations: ${pumpCount}`);
+  console.log(`🚨 Alarm Events: ${lowCount}`);
+  console.log(`💻 System & Device Events: ${systemCount}`);
 
   const subject = `📊 Daily Water Tank Report — ${digestDate}`;
   const text = `DAILY WATER TANK REPORT
@@ -344,7 +452,7 @@ TELEMETRY METRICS:
 - Minimum Water Level: ${minLevel}
 - Maximum Water Level: ${maxLevel}
 - Average Water Level: ${avgLevel}
-- Total Sensor Readings: ${telemetryCount > 0 ? telemetryCount : 'Not available'}
+- Total Sensor Readings: ${telemetryCount}
 
 EVENT METRICS:
 - Pump Activations: ${pumpCount} events
@@ -362,7 +470,7 @@ EVENT METRICS:
         <li><strong>Minimum Level:</strong> ${minLevel}</li>
         <li><strong>Maximum Level:</strong> ${maxLevel}</li>
         <li><strong>Average Level:</strong> ${avgLevel}</li>
-        <li><strong>Total Sensor Readings:</strong> ${telemetryCount > 0 ? telemetryCount : 'Not available'}</li>
+        <li><strong>Total Sensor Readings:</strong> ${telemetryCount}</li>
       </ul>
 
       <h4 style="color: #7dd3fc; margin-bottom: 8px;">Event Summaries</h4>

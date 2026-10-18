@@ -54,7 +54,7 @@ router.get('/full', async (req, res) => {
       date: new Date(e.timestamp).toLocaleDateString(),
       time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       waterLevelPercent: e.water_level_percentage,
-      distanceCm: e.distance_cm,
+      sensorValue: e.distance_cm !== undefined ? e.distance_cm : null,
       usageLiters: 0,
       pumpStatus: e.pump_status,
       mode: e.pump_mode,
@@ -68,9 +68,9 @@ router.get('/full', async (req, res) => {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="water_system_history.csv"');
 
-      let csv = 'ID,Date,Time,Category,Event,Details,Water Level (%),Distance (cm),Pump Status,Mode,Buzzer Status\n';
+      let csv = 'ID,Date,Time,Category,Event,Details,Water Level (%),Sensor Value,Pump Status,Mode,Buzzer Status\n';
       mapped.forEach(item => {
-        csv += `"${item.id}","${item.date}","${item.time}","${item.category}","${item.event.replace(/"/g, '""')}","${(item.details || '').replace(/"/g, '""')}","${item.waterLevelPercent !== null ? item.waterLevelPercent : ''}","${item.distanceCm !== null ? item.distanceCm : ''}","${item.pumpStatus || ''}","${item.mode || ''}","${item.buzzerStatus || ''}"\n`;
+        csv += `"${item.id}","${item.date}","${item.time}","${item.category}","${item.event.replace(/"/g, '""')}","${(item.details || '').replace(/"/g, '""')}","${item.waterLevelPercent !== null ? item.waterLevelPercent : ''}","${item.sensorValue !== null && item.sensorValue !== undefined ? item.sensorValue : ''}","${item.pumpStatus || ''}","${item.mode || ''}","${item.buzzerStatus || ''}"\n`;
       });
       return res.send(csv);
     }

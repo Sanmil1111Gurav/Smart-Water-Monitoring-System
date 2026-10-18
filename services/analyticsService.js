@@ -1,5 +1,67 @@
 const { getDb } = require('../database');
 
+const { WATER_FLOW_RATE_LPM } = require('../utils/config');
+
+function calculateRuntimeAndUsage(rows) {
+  let totalRuntimeMs = 0;
+  let activations = 0;
+  let lastOnTime = null;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const ts = new Date(row.timestamp).getTime();
+    
+    if (row.pump_status === 'ON') {
+      if (lastOnTime === null) {
+        lastOnTime = ts;
+        activations++;
+      } else {
+        const delta = ts - lastOnTime;
+        if (delta > 0 && delta <= 5 * 60 * 1000) {
+           totalRuntimeMs += delta;
+        }
+        lastOnTime = ts;
+      }
+    } else {
+      if (lastOnTime !== null) {
+        const delta = ts - lastOnTime;
+        if (delta > 0 && delta <= 5 * 60 * 1000) {
+           totalRuntimeMs += delta;
+        }
+        lastOnTime = null;
+      }
+    }
+  }
+
+  const runtimeMinutes = totalRuntimeMs / 60000;
+  return {
+    runtimeMinutes: Math.round(runtimeMinutes * 10) / 10,
+    estimatedLiters: Math.round(runtimeMinutes * WATER_FLOW_RATE_LPM),
+    activations
+  };
+}
+
+function getTimezoneDayBoundaries(dateStr, timeZone = 'Asia/Kolkata') {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const estimateUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const getOffsetMs = (date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    const p = {};
+    parts.forEach(pt => { p[pt.type] = pt.value; });
+    const hour = +p.hour === 24 ? 0 : +p.hour;
+    const localDate = new Date(Date.UTC(+p.year, +p.month - 1, +p.day, hour, +p.minute, +p.second));
+    return localDate.getTime() - date.getTime();
+  };
+  const offsetMs = getOffsetMs(estimateUtc);
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs;
+  return new Date(startUtcMs).toISOString();
+}
+
 /**
  * Analytics Query Service - DB Aggregations for Today, 7 Days, Month, Year
  */
@@ -9,9 +71,12 @@ async function getAnalytics(range = 'today', currentState) {
   let startTimeIso = new Date(0).toISOString();
 
   if (range === 'today') {
-    startTimeIso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    startTimeIso = getTimezoneDayBoundaries(todayStr);
   } else if (range === '7d') {
-    startTimeIso = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0).toISOString();
+    const startOf7d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    const start7dStr = `${startOf7d.getFullYear()}-${String(startOf7d.getMonth() + 1).padStart(2, '0')}-${String(startOf7d.getDate()).padStart(2, '0')}`;
+    startTimeIso = getTimezoneDayBoundaries(start7dStr);
   } else if (range === 'month') {
     startTimeIso = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).toISOString();
   } else if (range === 'year') {
@@ -47,7 +112,7 @@ async function getAnalytics(range = 'today', currentState) {
             const t = new Date(r.timestamp).getTime();
             return t >= blockStart && t < blockEnd;
           });
-          usageChartData.push(blockItems.length * 10);
+          usageChartData.push(calculateRuntimeAndUsage(blockItems).estimatedLiters);
         }
       });
     }
@@ -72,7 +137,7 @@ async function getAnalytics(range = 'today', currentState) {
       if (dayItems.length > 0) {
         const avgLvl = Math.round(dayItems.reduce((acc, c) => acc + c.water_level_percentage, 0) / dayItems.length);
         waterChartData.push(avgLvl);
-        usageChartData.push(dayItems.length * 15);
+        usageChartData.push(calculateRuntimeAndUsage(dayItems).estimatedLiters);
       } else {
         waterChartData.push(null);
         usageChartData.push(null);
@@ -100,7 +165,7 @@ async function getAnalytics(range = 'today', currentState) {
       if (dayItems.length > 0) {
         const avgLvl = Math.round(dayItems.reduce((acc, c) => acc + c.water_level_percentage, 0) / dayItems.length);
         waterChartData.push(avgLvl);
-        usageChartData.push(dayItems.length * 20);
+        usageChartData.push(calculateRuntimeAndUsage(dayItems).estimatedLiters);
       } else {
         waterChartData.push(null);
         usageChartData.push(null);
@@ -127,7 +192,7 @@ async function getAnalytics(range = 'today', currentState) {
         if (monthItems.length > 0) {
           const avgLvl = Math.round(monthItems.reduce((acc, c) => acc + c.water_level_percentage, 0) / monthItems.length);
           waterChartData.push(avgLvl);
-          usageChartData.push(monthItems.length * 25);
+          usageChartData.push(calculateRuntimeAndUsage(monthItems).estimatedLiters);
         } else {
           waterChartData.push(null);
           usageChartData.push(null);
@@ -144,13 +209,10 @@ async function getAnalytics(range = 'today', currentState) {
   const maxLvl = levelValues.length > 0 ? Math.max(...levelValues) : 0;
   const avgLvl = levelValues.length > 0 ? Math.round(levelValues.reduce((a, b) => a + b, 0) / levelValues.length) : 0;
 
-  let totalUsageLiters = 0;
-  if (usageChartData.length > 0) {
-    totalUsageLiters = usageChartData.reduce((acc, val) => acc + (val || 0), 0);
-  }
-
-  const activationsCount = rows.filter(r => r.pump_status === 'ON').length;
-  const totalRuntimeMinutes = Math.round(activationsCount * 8.5);
+  const totalStats = calculateRuntimeAndUsage(rows);
+  const totalUsageLiters = totalStats.estimatedLiters;
+  const activationsCount = totalStats.activations;
+  const totalRuntimeMinutes = totalStats.runtimeMinutes;
   const hasData = waterChartData.some(val => val !== null && val !== undefined) && waterChartLabels.length > 0;
 
   return {

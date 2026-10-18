@@ -71,7 +71,10 @@ router.post('/settings', requireAuth, async (req, res) => {
     );
   }
 
-  if (pump) state.pump = { ...state.pump, ...pump };
+  if (pump) {
+    const { mode, ...pumpUpdates } = pump;
+    Object.assign(state.pump, pumpUpdates);
+  }
   if (buzzer) {
     state.buzzer = { ...state.buzzer, ...buzzer };
     await db.run('UPDATE configuration SET buzzer_enabled = ?, updated_at = ? WHERE id = 1', [state.buzzer.enabled ? 1 : 0, nowIso]);

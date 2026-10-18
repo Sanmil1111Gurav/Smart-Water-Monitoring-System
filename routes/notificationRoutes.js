@@ -60,7 +60,8 @@ router.post('/preferences', requireAuth, async (req, res) => {
 // Manual Daily Digest Trigger
 router.post('/digest', requireAuth, async (req, res) => {
   try {
-    const result = await sendDailyDigest(req.user.userId, null, true);
+    const targetDate = req.body.date || req.body.digestDate || req.body.targetDate || null;
+    const result = await sendDailyDigest(req.user.userId, targetDate, true);
 
     if (!result.success) {
       if (result.skipped) {

@@ -2,7 +2,11 @@ const { getDb } = require('../database');
 const { triggerEmergencyAlert, sendEventNotification } = require('./emailService');
 const { EVENT_CATEGORIES } = require('../utils/constants');
 
-// In-Memory Real-Time System State Cache
+console.log('[STARTUP] telemetryService state initialized', { PID: process.pid, timestamp: new Date().toISOString() });
+
+
+let isConfigLoaded = false;
+
 let state = {
   esp32: {
     deviceName: 'ESP32 Node-01 (Main Tank Controller)',
@@ -15,9 +19,9 @@ let state = {
     firmware: null
   },
   sensor: {
-    deviceName: 'HC-SR04 Ultrasonic Distance Sensor',
+    deviceName: 'Water Level Sensor',
     waterLevelPercent: null,
-    distanceCm: null,
+    sensorValue: null,
     tankCapacityLiters: 1000,
     currentLiters: null,
     status: 'NOT_AVAILABLE',
@@ -129,21 +133,165 @@ function determineCategory(eventName, rawCategory) {
 }
 
 /**
+ * Helper to get start and end ISO strings for a calendar date in a specific timezone
+ */
+function getTimezoneDayBoundaries(dateStr, timeZone = 'Asia/Kolkata') {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const estimateUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const getOffsetMs = (date) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    const p = {};
+    parts.forEach(pt => { p[pt.type] = pt.value; });
+    const hour = +p.hour === 24 ? 0 : +p.hour;
+    const localDate = new Date(Date.UTC(+p.year, +p.month - 1, +p.day, hour, +p.minute, +p.second));
+    return localDate.getTime() - date.getTime();
+  };
+  const offsetMs = getOffsetMs(estimateUtc);
+  const startUtcMs = Date.UTC(year, month - 1, day, 0, 0, 0, 0) - offsetMs;
+  const endUtcMs = Date.UTC(year, month - 1, day, 23, 59, 59, 999) - offsetMs;
+  return {
+    startIso: new Date(startUtcMs).toISOString(),
+    endIso: new Date(endUtcMs).toISOString(),
+    startMs: startUtcMs,
+    endMs: endUtcMs
+  };
+}
+
+/**
+ * Calculate Today's Water Usage in Liters from Telemetry
+ */
+let lastCalcTime = 0;
+let cachedCalcResult = null;
+
+async function calculateTodayUsageLiters(timezone = 'Asia/Kolkata') {
+  if (Date.now() - lastCalcTime < 5000) {
+    return cachedCalcResult;
+  }
+  
+  try {
+    const db = getDb();
+    const now = new Date();
+    const options = { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' };
+    const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(now);
+    const p = {};
+    parts.forEach(pt => { p[pt.type] = pt.value; });
+    const todayStr = `${p.year}-${p.month}-${p.day}`;
+
+    const bounds = getTimezoneDayBoundaries(todayStr, timezone);
+    const rawRows = await db.all(
+      'SELECT pump_status, timestamp FROM telemetry WHERE timestamp >= ? AND timestamp <= ? ORDER BY timestamp ASC',
+      [bounds.startIso, bounds.endIso]
+    );
+
+    const rows = rawRows.filter(r => {
+      const tsMs = new Date(r.timestamp).getTime();
+      return !isNaN(tsMs) && tsMs >= bounds.startMs && tsMs <= bounds.endMs;
+    });
+
+    if (rows.length === 0) {
+      console.log("Today's Usage Calculation");
+      console.log(`Date: ${todayStr}`);
+      console.log(`Timezone: ${timezone}`);
+      console.log("Telemetry readings found: 0");
+      state.usageStats.todayLiters = null;
+      return null;
+    }
+
+    let totalRuntimeMs = 0;
+    let activations = 0;
+    let lastOnTimestamp = null;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const ts = new Date(row.timestamp).getTime();
+      if (isNaN(ts)) continue; // skip malformed timestamps
+
+      if (row.pump_status === 'ON') {
+        if (lastOnTimestamp === null) {
+          // pump just turned ON
+          lastOnTimestamp = ts;
+          activations++;
+        } else {
+          const delta = ts - lastOnTimestamp;
+          if (delta > 0 && delta <= 5 * 60 * 1000) {
+            totalRuntimeMs += delta;
+          }
+          lastOnTimestamp = ts; // update to current ON timestamp
+        }
+      } else { // pump OFF
+        if (lastOnTimestamp !== null) {
+          const delta = ts - lastOnTimestamp;
+          if (delta > 0 && delta <= 5 * 60 * 1000) {
+            totalRuntimeMs += delta;
+          }
+          lastOnTimestamp = null;
+        }
+      }
+    }
+
+    const { WATER_FLOW_RATE_LPM } = require('../utils/config');
+    const runtimeMinutes = totalRuntimeMs / 60000;
+    const calculatedLiters = Math.round(runtimeMinutes * WATER_FLOW_RATE_LPM);
+
+    console.log("Today's Usage Calculation (Runtime-Based)");
+    console.log(`Date: ${todayStr}`);
+    console.log(`Timezone: ${timezone}`);
+    console.log(`Telemetry readings found: ${rows.length}`);
+    console.log(`Activations: ${activations}`);
+    console.log(`Runtime Minutes: ${Math.round(runtimeMinutes * 10) / 10}`);
+    console.log(`Estimated consumption: ${calculatedLiters} L`);
+
+    state.usageStats.todayLiters = calculatedLiters;
+    state.pump.runtimeMinutesToday = Math.round(runtimeMinutes * 10) / 10;
+    state.pump.activationsToday = activations;
+
+    lastCalcTime = Date.now();
+    cachedCalcResult = calculatedLiters;
+    
+    return calculatedLiters;
+  } catch (err) {
+    console.error("Error calculating today's usage liters:", err);
+    return state.usageStats.todayLiters;
+  }
+}
+
+/**
+ * Centralized Authoritative Pump Mode Modifier with Global Trace
+ */
+function setPumpMode(newMode, source) {
+  if (newMode !== 'AUTO' && newMode !== 'MANUAL') return;
+  const prevMode = state.pump.mode;
+  state.pump.mode = newMode;
+  console.log(`[PUMP MODE CHANGE] ${prevMode} -> ${newMode} | SOURCE: ${source}`);
+}
+
+/**
  * Load Persisted Configuration from DB into State Cache
  */
 async function loadPersistedConfig() {
+  console.log('[STARTUP] loading persisted configuration');
   try {
     const db = getDb();
     const configRow = await db.get('SELECT * FROM configuration WHERE id = 1');
     if (configRow) {
+      console.log(`[STARTUP] SQLite pump_mode = ${configRow.pump_mode}`);
       state.thresholds.lowPercent = configRow.low_water_threshold;
       state.thresholds.fullPercent = configRow.full_water_threshold;
       state.thresholds.overflowPercent = configRow.emergency_overflow_threshold;
       state.thresholds.maxPumpTimeoutMinutes = configRow.max_pump_timeout_minutes;
       state.sensor.tankCapacityLiters = configRow.tank_capacity_liters;
-      state.pump.mode = configRow.pump_mode;
+      setPumpMode(configRow.pump_mode, 'loadPersistedConfig() startup — SQLite authoritative');
       state.buzzer.enabled = Boolean(configRow.buzzer_enabled);
+      console.log(`[STARTUP] runtime pump mode = ${state.pump.mode}`);
     }
+    await calculateTodayUsageLiters();
+    isConfigLoaded = true;
+    console.log('[STARTUP] configuration loaded');
   } catch (err) {
     console.error('Error loading configuration from DB:', err);
   }
@@ -170,7 +318,7 @@ async function logActivity(title, desc, type = 'info', icon = 'info', deviceId =
         desc,
         type,
         state.sensor.waterLevelPercent,
-        state.sensor.distanceCm,
+        state.sensor.sensorValue,
         state.pump.status,
         state.pump.mode,
         state.buzzer.active ? 'ALARM' : 'QUIET'
@@ -205,7 +353,7 @@ async function broadcastState() {
       date: new Date(e.timestamp).toLocaleDateString(),
       time: new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       waterLevelPercent: e.water_level_percentage,
-      distanceCm: e.distance_cm,
+      sensorValue: e.distance_cm !== undefined ? e.distance_cm : null,
       usageLiters: 0,
       pumpStatus: e.pump_status,
       mode: e.pump_mode,
@@ -222,6 +370,8 @@ async function broadcastState() {
       type: e.status || 'info',
       icon: e.category === EVENT_CATEGORIES.ALARM_EVENTS ? 'alert' : (e.category === EVENT_CATEGORIES.PUMP_EVENTS ? 'play' : 'info')
     }));
+
+    await calculateTodayUsageLiters();
 
     const payload = JSON.stringify({
       type: 'TELEMETRY_UPDATE',
@@ -280,13 +430,8 @@ async function evaluateWaterLogic() {
     }
   } else {
     state.inEmergencyCondition = false;
-    if (level <= state.thresholds.lowPercent && !state.buzzer.muted) {
-      state.buzzer.active = true;
-      state.buzzer.reason = 'LOW WATER ALARM';
-    } else {
-      state.buzzer.active = false;
-      state.buzzer.reason = null;
-    }
+    state.buzzer.active = false;
+    state.buzzer.reason = null;
   }
 
   if (state.pump.mode === 'AUTO') {
@@ -308,7 +453,7 @@ async function evaluateWaterLogic() {
  * Process Incoming Real Telemetry Data Packet
  */
 async function processTelemetry(data) {
-  const { deviceId = 'ESP32-001', waterLevelPercent, distanceCm, wifiRssi, temp, humidity, pumpStatus, ipAddress, macAddress, uptime, firmware } = data;
+  const { deviceId = 'ESP32-001', waterLevelPercent, sensorValue, distanceCm, wifiRssi, temp, humidity, pumpStatus, pumpMode, buzzerStatus, lowThreshold, fullThreshold, emergencyThreshold, ipAddress, macAddress, uptime, firmware } = data;
 
   if (waterLevelPercent !== undefined && (isNaN(waterLevelPercent) || waterLevelPercent < 0 || waterLevelPercent > 100)) {
     throw { status: 400, message: 'Invalid telemetry: waterLevelPercent must be between 0 and 100.' };
@@ -331,14 +476,30 @@ async function processTelemetry(data) {
     state.sensor.waterLevelPercent = Math.min(100, Math.max(0, Math.round(waterLevelPercent)));
     state.sensor.currentLiters = Math.round((state.sensor.waterLevelPercent / 100) * state.sensor.tankCapacityLiters);
   }
-  if (distanceCm !== undefined) state.sensor.distanceCm = distanceCm;
+  
+  const rawVal = sensorValue !== undefined ? sensorValue : distanceCm;
+  if (rawVal !== undefined) state.sensor.sensorValue = rawVal;
+
   if (temp !== undefined) state.systemHealth.temperature = temp;
   if (humidity !== undefined) state.systemHealth.humidity = humidity;
 
   state.sensor.lastReading = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+  if (pumpMode !== undefined) {
+    console.log(`[TELEMETRY] ESP32 reported pumpMode: ${pumpMode}`);
+    console.log(`[TELEMETRY] Backend authoritative pump mode: ${state.pump.mode}`);
+    console.log(`[TELEMETRY] Ignoring telemetry pumpMode for mode selection`);
+  }
+
   if (pumpStatus !== undefined) {
-    state.pump.status = pumpStatus;
+    if (state.pump.mode === 'AUTO') {
+      state.pump.status = pumpStatus;
+    } else {
+      console.log(`[TELEMETRY] Ignoring telemetry pumpStatus (${pumpStatus}) because backend is in MANUAL mode. Keeping backend status: ${state.pump.status}`);
+    }
+  }
+  if (buzzerStatus !== undefined) {
+    state.buzzer.active = (buzzerStatus === 'ALARM');
   }
 
   await db.run(
@@ -355,7 +516,7 @@ async function processTelemetry(data) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       deviceId,
-      distanceCm !== undefined ? distanceCm : null,
+      state.sensor.sensorValue !== null ? state.sensor.sensorValue : null,
       state.sensor.waterLevelPercent,
       state.pump.status,
       state.pump.mode,
@@ -426,6 +587,8 @@ function getState() {
 module.exports = {
   state,
   getState,
+  setPumpMode,
+  calculateTodayUsageLiters,
   setWebSocketServer,
   loadPersistedConfig,
   logActivity,

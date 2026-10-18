@@ -1,11 +1,12 @@
 require('dotenv').config();
+console.log('[SERVER INIT]', { PID: process.pid, timestamp: new Date().toISOString() });
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const cors = require('cors');
 
-const { initDatabase } = require('./database');
+const { initDatabase, getDb } = require('./database');
 const { sendDailyDigest, getPreviousCompletedDateString } = require('./services/emailService');
 const telemetryService = require('./services/telemetryService');
 
@@ -38,16 +39,32 @@ app.use('/api', settingsRoutes);
 telemetryService.setWebSocketServer(wss);
 
 wss.on('connection', async (ws) => {
+  const stateObj = telemetryService.getState();
+  console.log('[WS INITIAL STATE]', {
+    PID: process.pid,
+    timestamp: new Date().toISOString(),
+    statePumpMode: stateObj.pump.mode,
+    payloadPumpMode: stateObj.pump.mode
+  });
   await telemetryService.broadcastState();
 
   ws.on('message', async (message) => {
     try {
       const parsed = JSON.parse(message);
+      console.log('[WS RECEIVED]', parsed);
       if (parsed.type === 'PUMP_CONTROL') {
         const { mode, status } = parsed;
         const state = telemetryService.getState();
-        if (mode) state.pump.mode = mode;
-        if (status && state.pump.mode === 'MANUAL') state.pump.status = status;
+        const db = getDb();
+        const nowIso = new Date().toISOString();
+
+        if (mode && (mode === 'AUTO' || mode === 'MANUAL')) {
+          telemetryService.setPumpMode(mode, 'WebSocket PUMP_CONTROL message');
+          await db.run('UPDATE configuration SET pump_mode = ?, updated_at = ? WHERE id = 1', [mode, nowIso]);
+        }
+        if (status && state.pump.mode === 'MANUAL') {
+          state.pump.status = status;
+        }
         await telemetryService.evaluateWaterLogic();
         await telemetryService.broadcastState();
       }
@@ -81,9 +98,8 @@ function startDailyDigestScheduler() {
 
       if (curHour === digestHour && curMinute === digestMinute && lastRunDateStr !== currentDateStr) {
         lastRunDateStr = currentDateStr;
-        const prevDateStr = getPreviousCompletedDateString(timezone);
-        console.log(`⏰ Daily Digest Scheduler executing for completed date: ${prevDateStr}`);
-        await sendDailyDigest(null, prevDateStr);
+        console.log(`⏰ Daily Digest Scheduler executing...`);
+        await sendDailyDigest(null, null);
       }
     } catch (err) {
       console.error('Error in Daily Digest Scheduler tick:', err);
@@ -100,6 +116,9 @@ async function startServer() {
   startDailyDigestScheduler();
 
   server.listen(PORT, () => {
+    console.log('[STARTUP] HTTP server ready');
+    console.log('[STARTUP] WebSocket ready');
+    console.log('[STARTUP] telemetry processing ready');
     console.log(`====================================================`);
     console.log(`💧 ESP32 Water Level & Pump Control Server Running `);
     console.log(`🗄️ Database Persistent Storage: SQLite (water_monitoring.db)`);
